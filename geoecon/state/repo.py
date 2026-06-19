@@ -1,0 +1,201 @@
+from __future__ import annotations
+import json
+from datetime import datetime, timedelta, timezone
+from typing import Any
+import psycopg
+from psycopg.types.json import Jsonb
+from .models import Article, Cluster, SynthesisRecord
+
+class Repo:
+    def __init__(self, conn: psycopg.Connection):
+        self.conn = conn
+
+    # ---- runs / stages ----
+    def create_run(self, window_start, window_end, scheduled_for,
+                   synthesis_model, synthesis_prompt_id, embedding_model=None) -> int:
+        return self.conn.execute(
+            """INSERT INTO runs(window_start, window_end, scheduled_for,
+                 synthesis_model, synthesis_prompt_id, embedding_model)
+               VALUES (%s,%s,%s,%s,%s,%s) RETURNING run_id""",
+            (window_start, window_end, scheduled_for, synthesis_model,
+             synthesis_prompt_id, embedding_model)).fetchone()[0]
+
+    def find_resumable_run(self, window_start, window_end) -> int | None:
+        row = self.conn.execute(
+            """SELECT run_id FROM runs
+               WHERE window_start=%s AND window_end=%s AND status IN ('running','failed','partial')
+               ORDER BY run_id DESC LIMIT 1""", (window_start, window_end)).fetchone()
+        return row[0] if row else None
+
+    def completed_stages(self, run_id) -> set[str]:
+        rows = self.conn.execute(
+            "SELECT stage_name FROM stage_runs WHERE run_id=%s AND status='completed'",
+            (run_id,)).fetchall()
+        return {r[0] for r in rows}
+
+    def _upsert_stage(self, run_id, stage, status, checkpoint=None, error=None):
+        self.conn.execute(
+            """INSERT INTO stage_runs(run_id, stage_name, status, started_at, finished_at, checkpoint, error)
+               VALUES (%s,%s,%s, now(), %s, %s, %s)
+               ON CONFLICT (run_id, stage_name) DO UPDATE SET
+                 status=EXCLUDED.status,
+                 finished_at=COALESCE(EXCLUDED.finished_at, stage_runs.finished_at),
+                 checkpoint=COALESCE(EXCLUDED.checkpoint, stage_runs.checkpoint),
+                 error=EXCLUDED.error""",
+            (run_id, stage, status,
+             datetime.now(timezone.utc) if status in ("completed", "failed", "skipped") else None,
+             Jsonb(checkpoint) if checkpoint is not None else Jsonb({}), error))
+
+    def start_stage(self, run_id, stage): self._upsert_stage(run_id, stage, "running")
+    def complete_stage(self, run_id, stage, checkpoint=None): self._upsert_stage(run_id, stage, "completed", checkpoint)
+    def fail_stage(self, run_id, stage, error): self._upsert_stage(run_id, stage, "failed", error=str(error)[:4000])
+    def skip_stage(self, run_id, stage): self._upsert_stage(run_id, stage, "skipped")
+
+    def set_run_status(self, run_id, status):
+        self.conn.execute(
+            "UPDATE runs SET status=%s, finished_at=CASE WHEN %s IN ('completed','failed','partial') THEN now() ELSE finished_at END WHERE run_id=%s",
+            (status, status, run_id))
+
+    def merge_run_metrics(self, run_id, metrics: dict):
+        self.conn.execute("UPDATE runs SET metrics = metrics || %s WHERE run_id=%s",
+                          (Jsonb(metrics), run_id))
+
+    # ---- articles ----
+    def insert_article(self, run_id, *, source_url, url_hash, domain=None, region=None,
+                       gkg_themes=None, gkg_tone=None, num_mentions=None, source_lang=None,
+                       title=None, gdelt_gkg_id=None, canonical_url=None, published_at=None,
+                       discovered_via="gdelt") -> int:
+        existing = self.conn.execute(
+            "SELECT article_id FROM articles WHERE run_id=%s AND url_hash=%s",
+            (run_id, url_hash)).fetchone()
+        if existing:
+            return existing[0]
+        return self.conn.execute(
+            """INSERT INTO articles(run_id, gdelt_gkg_id, source_url, canonical_url, url_hash,
+                 domain, discovered_via, region, gkg_themes, gkg_tone, num_mentions,
+                 source_lang, title, published_at)
+               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING article_id""",
+            (run_id, gdelt_gkg_id, source_url, canonical_url, url_hash, domain, discovered_via,
+             region, gkg_themes or [], gkg_tone, num_mentions, source_lang, title, published_at)
+        ).fetchone()[0]
+
+    def update_extraction(self, article_id, body, fetch_status, source_lang=None, fetch_error=None):
+        self.conn.execute(
+            "UPDATE articles SET body=%s, fetch_status=%s, source_lang=COALESCE(%s, source_lang), fetch_error=%s WHERE article_id=%s",
+            (body, fetch_status, source_lang, fetch_error, article_id))
+
+    def articles_for_run(self, run_id, fetch_status=None) -> list[Article]:
+        q = ("SELECT article_id, source_url, url_hash, domain, region, gkg_themes, gkg_tone, "
+             "num_mentions, source_lang, title, body, fetch_status FROM articles WHERE run_id=%s")
+        params: tuple = (run_id,)
+        if fetch_status:
+            q += " AND fetch_status=%s"; params += (fetch_status,)
+        return [Article(*r) for r in self.conn.execute(q + " ORDER BY article_id", params).fetchall()]
+
+    # ---- clusters ----
+    def insert_cluster(self, run_id, event_fingerprint, region, languages, article_count,
+                       framing_divergent=False) -> int:
+        return self.conn.execute(
+            """INSERT INTO clusters(run_id, event_fingerprint, region, languages, article_count, framing_divergent)
+               VALUES (%s,%s,%s,%s,%s,%s) RETURNING cluster_id""",
+            (run_id, event_fingerprint, region, languages, article_count, framing_divergent)).fetchone()[0]
+
+    def add_membership(self, cluster_id, article_id, frame_label=None):
+        self.conn.execute(
+            "INSERT INTO cluster_articles(cluster_id, article_id, frame_label) VALUES (%s,%s,%s) ON CONFLICT DO NOTHING",
+            (cluster_id, article_id, frame_label))
+
+    def clusters_for_run(self, run_id) -> list[Cluster]:
+        rows = self.conn.execute(
+            "SELECT cluster_id, event_fingerprint, region, languages, article_count, framing_divergent FROM clusters WHERE run_id=%s ORDER BY cluster_id",
+            (run_id,)).fetchall()
+        return [Cluster(*r) for r in rows]
+
+    def articles_in_cluster(self, cluster_id) -> list[Article]:
+        rows = self.conn.execute(
+            """SELECT a.article_id, a.source_url, a.url_hash, a.domain, a.region, a.gkg_themes,
+                 a.gkg_tone, a.num_mentions, a.source_lang, a.title, a.body, a.fetch_status
+               FROM articles a JOIN cluster_articles ca ON ca.article_id=a.article_id
+               WHERE ca.cluster_id=%s ORDER BY a.article_id""", (cluster_id,)).fetchall()
+        return [Article(*r) for r in rows]
+
+    # ---- synthesis ----
+    def upsert_synthesis_record(self, run_id, cluster_id, fields: dict, quality_flag,
+                                quality_detail=None, is_headline_only=False) -> int:
+        f = fields
+        return self.conn.execute(
+            """INSERT INTO synthesis_records(run_id, cluster_id, headline_en, headline_original,
+                 headline_original_lang, what_happened_en, geoeconomic_significance_en,
+                 geoeconomic_vector, entities, key_figures, framing_divergence, sources,
+                 synthesis_quality_flag, quality_detail, is_headline_only)
+               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+               ON CONFLICT (run_id, cluster_id) DO UPDATE SET
+                 headline_en=EXCLUDED.headline_en, headline_original=EXCLUDED.headline_original,
+                 headline_original_lang=EXCLUDED.headline_original_lang,
+                 what_happened_en=EXCLUDED.what_happened_en,
+                 geoeconomic_significance_en=EXCLUDED.geoeconomic_significance_en,
+                 geoeconomic_vector=EXCLUDED.geoeconomic_vector, entities=EXCLUDED.entities,
+                 key_figures=EXCLUDED.key_figures, framing_divergence=EXCLUDED.framing_divergence,
+                 sources=EXCLUDED.sources, synthesis_quality_flag=EXCLUDED.synthesis_quality_flag,
+                 quality_detail=EXCLUDED.quality_detail, is_headline_only=EXCLUDED.is_headline_only
+               RETURNING record_id""",
+            (run_id, cluster_id, f.get("headline_en"), f.get("headline_original"),
+             f.get("headline_original_lang"), f.get("what_happened_en"),
+             f.get("geoeconomic_significance_en"), f.get("geoeconomic_vector") or [],
+             Jsonb(f.get("entities") or []), Jsonb(f.get("key_figures") or []),
+             Jsonb(f.get("framing_divergence")) if f.get("framing_divergence") is not None else None,
+             Jsonb(f.get("sources") or []), quality_flag,
+             Jsonb(quality_detail) if quality_detail is not None else None, is_headline_only)
+        ).fetchone()[0]
+
+    def ok_records(self, run_id) -> list[SynthesisRecord]:
+        rows = self.conn.execute(
+            """SELECT record_id, cluster_id, headline_en, headline_original, headline_original_lang,
+                 what_happened_en, geoeconomic_significance_en, geoeconomic_vector, entities,
+                 key_figures, framing_divergence, sources, is_headline_only
+               FROM synthesis_records WHERE run_id=%s AND synthesis_quality_flag='ok'
+               ORDER BY record_id""", (run_id,)).fetchall()
+        out = []
+        for r in rows:
+            out.append(SynthesisRecord(
+                record_id=r[0], cluster_id=r[1],
+                fields={"headline_en": r[2], "headline_original": r[3],
+                        "headline_original_lang": r[4], "what_happened_en": r[5],
+                        "geoeconomic_significance_en": r[6], "geoeconomic_vector": r[7],
+                        "entities": r[8], "key_figures": r[9], "framing_divergence": r[10],
+                        "sources": r[11]},
+                quality_flag="ok", is_headline_only=r[12]))
+        return out
+
+    # ---- seen-store ----
+    def get_seen(self, fingerprint) -> dict | None:
+        row = self.conn.execute(
+            "SELECT event_fingerprint, times_seen, last_emitted_at, expires_at FROM seen_events WHERE event_fingerprint=%s",
+            (fingerprint,)).fetchone()
+        if not row:
+            return None
+        return {"event_fingerprint": row[0], "times_seen": row[1],
+                "last_emitted_at": row[2], "expires_at": row[3]}
+
+    def upsert_seen(self, fingerprint, run_id, ttl_days=14):
+        expires = datetime.now(timezone.utc) + timedelta(days=ttl_days)
+        self.conn.execute(
+            """INSERT INTO seen_events(event_fingerprint, first_seen_run, last_seen_run,
+                 last_emitted_at, times_seen, expires_at)
+               VALUES (%s,%s,%s, now(), 1, %s)
+               ON CONFLICT (event_fingerprint) DO UPDATE SET
+                 last_seen_run=EXCLUDED.last_seen_run, last_emitted_at=now(),
+                 times_seen=seen_events.times_seen+1, expires_at=EXCLUDED.expires_at""",
+            (fingerprint, run_id, run_id, expires))
+
+    # ---- newsletters ----
+    def insert_newsletter(self, run_id, render_mode, archive_html_path, email_html, record_count) -> int:
+        return self.conn.execute(
+            """INSERT INTO newsletters(run_id, render_mode, archive_html_path, email_html, record_count)
+               VALUES (%s,%s,%s,%s,%s) RETURNING newsletter_id""",
+            (run_id, render_mode, archive_html_path, email_html, record_count)).fetchone()[0]
+
+    def update_newsletter_send(self, newsletter_id, send_status, send_error=None):
+        self.conn.execute(
+            "UPDATE newsletters SET send_status=%s, send_error=%s, sent_at=CASE WHEN %s='sent' THEN now() ELSE sent_at END WHERE newsletter_id=%s",
+            (send_status, send_error, send_status, newsletter_id))

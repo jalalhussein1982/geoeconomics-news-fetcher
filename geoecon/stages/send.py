@@ -10,7 +10,8 @@ def build_message(cfg, subject, html) -> EmailMessage:
     msg["From"] = cfg.from_addr
     msg["To"] = ", ".join(cfg.recipients)
     msg["Subject"] = subject
-    msg.set_content(html, subtype="html")
+    msg.set_content("HTML email — please view in an HTML-capable client.")
+    msg.add_alternative(html, subtype="html")
     return msg
 
 

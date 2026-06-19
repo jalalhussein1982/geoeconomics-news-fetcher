@@ -9,7 +9,10 @@ def test_build_message_sets_headers_and_html():
     assert msg["From"] == "me@gmail.com"
     assert msg["To"] == "a@x.com, b@y.com"
     assert msg["Subject"] == "Subject X"
-    assert msg.get_content_type() == "text/html"
+    assert msg.get_content_type() == "multipart/alternative"
+    html_part = msg.get_body(preferencelist=("html",))
+    assert html_part is not None and html_part.get_content_type() == "text/html"
+    assert "<b>hi</b>" in html_part.get_content()
 
 def test_run_marks_sent_on_success():
     sent = {}

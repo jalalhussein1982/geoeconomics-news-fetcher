@@ -4,6 +4,7 @@ from geoecon.stages import cluster
 def test_fingerprint_prefers_title_then_url():
     assert cluster.fingerprint("Saudi Trade Deal", None) == cluster.fingerprint("  saudi   trade deal ", None)
     assert cluster.fingerprint(None, "http://a/b") == cluster.fingerprint(None, "http://a/b")
+    assert cluster.fingerprint(None, "http://a/b") != cluster.fingerprint(None, "http://a/c")
 
 
 def test_run_creates_one_cluster_per_article():

@@ -17,13 +17,18 @@ def _default_stages(cfg, client):
         out = render.run(c, r, rid, date_str, stats=state.get("m"))
         state["render"] = out; return {"record_count": out["record_count"]}
     def _send(c, r, rid):
-        out = state["render"]
+        out = state.get("render") or r.get_newsletter(rid)
+        if out is None:
+            raise RuntimeError("send: render stage completed but no newsletter row found")
         if c.dry_run:
             log.info("dry-run: skipping send"); return {"send_status": "skipped"}
         if out["record_count"] == 0 and not c.send_heartbeat:
             return {"send_status": "skipped_empty"}
         subject = f"Geoeconomic Brief — {date_str}"
-        return send.run(c, r, out["newsletter_id"], subject, out["email_html"])
+        result = send.run(c, r, out["newsletter_id"], subject, out["email_html"])
+        if result.get("send_status") == "sent":
+            r.mark_emitted(rid)
+        return result
     return [("discovery", _discovery), ("extraction", _extract), ("cluster", _cluster),
             ("synthesis", _synth), ("render", _render), ("send", _send)]
 

@@ -1,5 +1,4 @@
 from __future__ import annotations
-import json
 from datetime import datetime, timedelta, timezone
 from typing import Any
 import psycopg
@@ -199,3 +198,17 @@ class Repo:
         self.conn.execute(
             "UPDATE newsletters SET send_status=%s, send_error=%s, sent_at=CASE WHEN %s='sent' THEN now() ELSE sent_at END WHERE newsletter_id=%s",
             (send_status, send_error, send_status, newsletter_id))
+
+    def get_newsletter(self, run_id) -> dict | None:
+        row = self.conn.execute(
+            "SELECT newsletter_id, record_count, email_html FROM newsletters WHERE run_id=%s",
+            (run_id,)).fetchone()
+        if not row:
+            return None
+        return {"newsletter_id": row[0], "record_count": row[1], "email_html": row[2]}
+
+    def mark_emitted(self, run_id):
+        ok_cluster_ids = {rec.cluster_id for rec in self.ok_records(run_id)}
+        for cl in self.clusters_for_run(run_id):
+            if cl.cluster_id in ok_cluster_ids:
+                self.upsert_seen(cl.event_fingerprint, run_id)

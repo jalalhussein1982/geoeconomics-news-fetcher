@@ -63,3 +63,42 @@ def test_seen_store_roundtrip(repo):
     assert repo.get_seen("fpX")["times_seen"] == 1
     repo.upsert_seen("fpX", rid)
     assert repo.get_seen("fpX")["times_seen"] == 2
+
+@requires_db
+def test_get_newsletter_roundtrip(repo):
+    ws, we, sf = _win()
+    rid = repo.create_run(ws, we, sf, "deepseek-v3.2", "task_a_cov")
+    # no newsletter yet
+    assert repo.get_newsletter(rid) is None
+    nid = repo.insert_newsletter(rid, "en_only", "/archive/x.html", "<p>hello</p>", 3)
+    result = repo.get_newsletter(rid)
+    assert result is not None
+    assert result["newsletter_id"] == nid
+    assert result["record_count"] == 3
+    assert result["email_html"] == "<p>hello</p>"
+
+@requires_db
+def test_mark_emitted_marks_only_ok_clusters(repo):
+    ws, we, sf = _win()
+    rid = repo.create_run(ws, we, sf, "deepseek-v3.2", "task_a_cov")
+    # cluster A — ok synthesis record
+    aid_a = repo.insert_article(rid, source_url="http://a/1", url_hash="ha1", domain="a",
+                                region="MENA", gkg_themes=[], title="A")
+    cid_a = repo.insert_cluster(rid, "fpA", "MENA", ["en"], 1)
+    repo.add_membership(cid_a, aid_a)
+    repo.upsert_synthesis_record(rid, cid_a, {"headline_en": "A"}, "ok")
+    # cluster B — non-ok synthesis record
+    aid_b = repo.insert_article(rid, source_url="http://b/1", url_hash="hb1", domain="b",
+                                region="other", gkg_themes=[], title="B")
+    cid_b = repo.insert_cluster(rid, "fpB", "other", ["de"], 1)
+    repo.add_membership(cid_b, aid_b)
+    repo.upsert_synthesis_record(rid, cid_b, {"headline_en": "B"}, "zero_entities")
+    # neither seen yet
+    assert repo.get_seen("fpA") is None
+    assert repo.get_seen("fpB") is None
+    repo.mark_emitted(rid)
+    seen_a = repo.get_seen("fpA")
+    assert seen_a is not None
+    assert seen_a["times_seen"] == 1
+    assert seen_a["last_emitted_at"] is not None
+    assert repo.get_seen("fpB") is None

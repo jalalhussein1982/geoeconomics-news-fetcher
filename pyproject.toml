@@ -28,4 +28,4 @@ build-backend = "setuptools.build_meta"
 include = ["geoecon*"]
 
 [tool.setuptools.package-data]
-geoecon = ["prompts/*.txt", "render/templates/*.j2"]
+geoecon = ["prompts/*.txt", "render/templates/*.j2", "state/migrations/*.sql"]

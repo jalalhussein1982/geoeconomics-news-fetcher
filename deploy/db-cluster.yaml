@@ -13,10 +13,12 @@ spec:
     initdb:
       database: geoeconomics
       owner: geoecon
-      postInitApplicationSQLRefs:
-        configMapRefs:
-          - name: geoecon-db-init
-            key: 001_init.sql
+      # Schema is NOT bootstrapped here. The application owns migrations:
+      # geoecon/state/db.apply_migrations() applies geoecon/state/migrations/*.sql
+      # (idempotent, tracked in schema_migrations) on startup, connecting AS the
+      # geoecon role — so the tables are geoecon-owned and writable. Bootstrapping
+      # via postInitApplicationSQL would create postgres-owned tables the app
+      # cannot write to.
   resources:
     requests: { cpu: "100m", memory: "256Mi" }
     limits: { cpu: "500m", memory: "1Gi" }

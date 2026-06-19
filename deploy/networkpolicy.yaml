@@ -8,8 +8,14 @@ spec:
     matchLabels: { cnpg.io/cluster: geoecon-db }
   policyTypes: ["Ingress"]
   ingress:
+    # the pipeline pods (CronJob/one-shot) reach Postgres
     - from:
         - podSelector:
             matchLabels: { app: geoecon }
       ports:
         - { protocol: TCP, port: 5432 }
+    # the CloudNativePG operator manages the instance (status/metrics/etc.);
+    # allow all ports from its namespace so the NetworkPolicy can't strangle it
+    - from:
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: cloudnativepg }

@@ -1,0 +1,15 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: geoecon-db-netpol
+  namespace: hussein-ns
+spec:
+  podSelector:
+    matchLabels: { cnpg.io/cluster: geoecon-db }
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: { app: geoecon }
+      ports:
+        - { protocol: TCP, port: 5432 }

@@ -1,0 +1,48 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: geoecon-daily
+  namespace: hussein-ns
+spec:
+  schedule: "0 7 * * *"
+  timeZone: "Europe/Prague"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 7
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        metadata:
+          labels: { app: geoecon }
+        spec:
+          restartPolicy: OnFailure
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            seccompProfile: { type: RuntimeDefault }
+          containers:
+            - name: pipeline
+              image: jalalhussein/geoecon-pipeline:dev
+              args: ["run"]
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities: { drop: ["ALL"] }
+              envFrom:
+                - secretRef: { name: geoecon-secrets }
+              env:
+                - name: DB_USER
+                  valueFrom: { secretKeyRef: { name: geoecon-db-app, key: username } }
+                - name: DB_PASS
+                  valueFrom: { secretKeyRef: { name: geoecon-db-app, key: password } }
+                - name: DB_DSN
+                  value: "postgresql://$(DB_USER):$(DB_PASS)@geoecon-db-rw:5432/geoeconomics"
+              resources:
+                requests: { cpu: "1", memory: "1Gi" }
+                limits: { cpu: "2", memory: "2Gi" }
+              volumeMounts:
+                - { name: archive, mountPath: /data/archive }
+          volumes:
+            - name: archive
+              persistentVolumeClaim: { claimName: geoecon-archive }

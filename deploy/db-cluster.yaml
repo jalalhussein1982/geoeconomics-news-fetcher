@@ -1,0 +1,22 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: geoecon-db
+  namespace: hussein-ns
+spec:
+  instances: 1
+  imageName: ghcr.io/cloudnative-pg/postgresql:17
+  storage:
+    size: 5Gi
+    storageClass: nfs-csi
+  bootstrap:
+    initdb:
+      database: geoeconomics
+      owner: geoecon
+      postInitApplicationSQLRefs:
+        configMapRefs:
+          - name: geoecon-db-init
+            key: 001_init.sql
+  resources:
+    requests: { cpu: "100m", memory: "256Mi" }
+    limits: { cpu: "500m", memory: "1Gi" }

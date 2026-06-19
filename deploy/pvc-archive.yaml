@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: geoecon-archive
+  namespace: hussein-ns
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources: { requests: { storage: 2Gi } }
+  storageClassName: nfs-csi

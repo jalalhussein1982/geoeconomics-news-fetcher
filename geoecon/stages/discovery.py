@@ -79,8 +79,9 @@ def run(
         seen_hashes.add(h)
         kept.append((rec, region, h))
 
-    # Salience proxy: theme-hit count desc; cap at CEILING (or cfg.limit)
-    kept.sort(key=lambda x: len(x[0].themes), reverse=True)
+    # Salience proxy: target-theme density desc (focused economic coverage over
+    # sprawling omnibus articles); cap at CEILING (or cfg.limit).
+    kept.sort(key=lambda x: gdelt.theme_salience(x[0].themes), reverse=True)
     ceiling = cfg.limit or CEILING
     kept = kept[:ceiling]
 

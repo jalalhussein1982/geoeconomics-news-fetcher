@@ -23,6 +23,11 @@ class Config:
     embedding_model: str | None = None
     regions: tuple[str, ...] = ("MENA", "LatAm")
     buckets: tuple[str, ...] = BUCKET_ORDER
+    gate_model: str = "deepseek-v3.2"
+    gate_batch_size: int = 15
+    region_cap: int = 12
+    discovery_ceiling: int = 120
+    dedup_jaccard: float = 0.6
     window_hours: int = 24
     timezone: str = "Europe/Prague"
     archive_dir: str = "/data/archive"
@@ -51,6 +56,11 @@ class Config:
             embedding_model=env.get("EMBEDDING_MODEL") or None,
             regions=_split(env.get("REGIONS", "MENA,LatAm")),
             buckets=_split(env.get("BUCKETS", ",".join(BUCKET_ORDER))),
+            gate_model=env.get("GATE_MODEL", "deepseek-v3.2"),
+            gate_batch_size=int(env.get("GATE_BATCH_SIZE", "15")),
+            region_cap=int(env.get("REGION_CAP", "12")),
+            discovery_ceiling=int(env.get("DISCOVERY_CEILING", "120")),
+            dedup_jaccard=float(env.get("DEDUP_JACCARD", "0.6")),
             window_hours=int(env.get("WINDOW_HOURS", "24")),
             timezone=env.get("TIMEZONE", "Europe/Prague"),
             archive_dir=env.get("ARCHIVE_DIR", "/data/archive"),

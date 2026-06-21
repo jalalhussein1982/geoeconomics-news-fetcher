@@ -44,3 +44,21 @@ def test_buckets_default_is_three_regions():
 def test_buckets_overridable_from_env():
     cfg = Config.from_env({**_ENV, "BUCKETS": "middle_east, latam"})
     assert cfg.buckets == ("middle_east", "latam")
+
+
+def test_capture_overhaul_defaults():
+    cfg = Config.from_env(dict(_ENV))
+    assert cfg.gate_model == "deepseek-v3.2"
+    assert cfg.gate_batch_size == 15
+    assert cfg.region_cap == 12
+    assert cfg.discovery_ceiling == 120
+    assert cfg.dedup_jaccard == 0.6
+
+
+def test_capture_overhaul_env_overrides():
+    cfg = Config.from_env({**_ENV, "REGION_CAP": "8", "DEDUP_JACCARD": "0.7",
+                           "GATE_BATCH_SIZE": "20", "DISCOVERY_CEILING": "200",
+                           "GATE_MODEL": "qwen3"})
+    assert cfg.region_cap == 8 and cfg.dedup_jaccard == 0.7
+    assert cfg.gate_batch_size == 20 and cfg.discovery_ceiling == 200
+    assert cfg.gate_model == "qwen3"

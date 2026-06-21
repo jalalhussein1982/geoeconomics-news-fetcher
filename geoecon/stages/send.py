@@ -34,3 +34,27 @@ def run(cfg, repo, newsletter_id, subject, html, *, transport=_smtp_transport) -
     repo.update_newsletter_send(newsletter_id, "sent")
     log.info("send: ok -> %s", cfg.recipients)
     return {"send_status": "sent"}
+
+
+def send_pending(cfg, repo, newsletters, subject_for, *, transport=_smtp_transport) -> dict:
+    """Send every not-yet-sent newsletter. Returns {results, any_sent, all_sent}.
+
+    subject_for(bucket) -> subject string. Does NOT touch the seen-store; the
+    caller decides whether to mark events emitted based on all_sent.
+    """
+    results = []
+    any_sent = False
+    any_failed = False
+    for nl in newsletters:
+        if nl.get("send_status") == "sent":
+            results.append((nl["bucket"], "already_sent"))
+            continue
+        res = run(cfg, repo, nl["newsletter_id"], subject_for(nl["bucket"]),
+                  nl["email_html"], transport=transport)
+        status = res.get("send_status")
+        results.append((nl["bucket"], status))
+        if status == "sent":
+            any_sent = True
+        else:
+            any_failed = True
+    return {"results": results, "any_sent": any_sent, "all_sent": not any_failed}

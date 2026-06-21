@@ -24,21 +24,14 @@ def _default_stages(cfg, client):
         newsletters = r.newsletters_for_run(rid)
         if not newsletters:
             return {"send_status": "skipped_empty"}
-        any_sent = False
-        results = []
-        for nl in newsletters:
-            if nl["send_status"] == "sent":
-                results.append((nl["bucket"], "already_sent")); continue
-            display = regions.BUCKET_DISPLAY.get(nl["bucket"], nl["bucket"] or "")
-            subject = f"Geoeconomic Brief — {display} — {date_str}"
-            res = send.run(c, r, nl["newsletter_id"], subject, nl["email_html"])
-            status = res.get("send_status")
-            results.append((nl["bucket"], status))
-            if status == "sent":
-                any_sent = True
-        if any_sent:
+        def subject_for(bucket):
+            display = regions.BUCKET_DISPLAY.get(bucket, bucket or "")
+            return f"Geoeconomic Brief — {display} — {date_str}"
+        out = send.send_pending(c, r, newsletters, subject_for)
+        if out["all_sent"]:
             r.mark_emitted(rid)
-        return {"send_status": "sent" if any_sent else "failed", "sent": results}
+            return {"send_status": "sent", "sent": out["results"]}
+        raise RuntimeError(f"send: some regions failed to send: {out['results']}")
     return [("discovery", _discovery), ("extraction", _extract), ("cluster", _cluster),
             ("synthesis", _synth), ("summary", _summary), ("render", _render), ("send", _send)]
 

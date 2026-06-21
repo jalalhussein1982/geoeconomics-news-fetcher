@@ -18,7 +18,7 @@ def _client(answer):
     class C:
         def __init__(self): self.calls = []
         def complete(self, model, messages, **kw):
-            self.calls.append((model, messages)); return Resp(answer)
+            self.calls.append((model, messages, kw)); return Resp(answer)
 
     return C()
 
@@ -50,6 +50,9 @@ def test_groups_by_bucket_and_skips_empty():
     # region display interpolated into the system prompt
     me_system = client.calls[0][1][0]["content"]
     assert "Middle East" in me_system
+    # determinism kwargs forwarded to the client (Global Constraint)
+    first_kw = client.calls[0][2]
+    assert first_kw["temperature"] == 0 and first_kw["seed"] == 12345
 
 
 def test_bad_json_degrades_to_empty_summary():

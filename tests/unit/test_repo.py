@@ -224,3 +224,35 @@ def test_region_summary_upsert_and_get(repo):
     got2 = repo.get_region_summary(rid, "middle_east")
     assert got2["lede_en"] == "Lede two." and got2["takeaways"] == ["c"]
     assert repo.get_region_summary(rid, "latam") is None
+
+
+@requires_db
+def test_articles_for_run_includes_country_fips(repo):
+    ws, we, sf = _win()
+    rid = repo.create_run(ws, we, sf, "deepseek-v3.2", "task_a_cov")
+    repo.insert_article(rid, source_url="u", url_hash="h", region="MENA",
+                        country_fips="EG", title="t")
+    arts = repo.articles_for_run(rid)
+    assert arts[0].country_fips == "EG"
+
+
+@requires_db
+def test_cluster_run_persists_country_fips_via_repo(repo):
+    from geoecon.stages import cluster as cluster_stage
+    ws, we, sf = _win()
+    rid = repo.create_run(ws, we, sf, "deepseek-v3.2", "task_a_cov")
+    repo.insert_article(rid, source_url="u", url_hash="h", region="MENA",
+                        country_fips="EG", title="t")
+    cluster_stage.run(None, repo, rid)  # cluster.run ignores cfg
+    crow = repo.conn.execute(
+        "SELECT country_fips FROM clusters WHERE run_id=%s", (rid,)).fetchone()
+    assert crow[0] == "EG"
+
+
+@requires_db
+def test_synthesis_remains_allowed_stage_name(repo):
+    ws, we, sf = _win()
+    rid = repo.create_run(ws, we, sf, "deepseek-v3.2", "task_a_cov")
+    repo.start_stage(rid, "synthesis")   # must not raise (CHECK must include 'synthesis')
+    repo.complete_stage(rid, "synthesis")
+    assert "synthesis" in repo.completed_stages(rid)

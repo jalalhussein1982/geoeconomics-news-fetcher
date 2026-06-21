@@ -86,7 +86,7 @@ class Repo:
 
     def articles_for_run(self, run_id, fetch_status=None) -> list[Article]:
         q = ("SELECT article_id, source_url, url_hash, domain, region, gkg_themes, gkg_tone, "
-             "num_mentions, source_lang, title, body, fetch_status FROM articles WHERE run_id=%s")
+             "num_mentions, source_lang, title, body, fetch_status, country_fips FROM articles WHERE run_id=%s")
         params: tuple = (run_id,)
         if fetch_status:
             q += " AND fetch_status=%s"; params += (fetch_status,)

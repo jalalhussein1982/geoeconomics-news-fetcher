@@ -193,6 +193,24 @@ def test_records_for_buckets_excludes_non_ok(repo):
 
 
 @requires_db
+def test_newsletter_per_bucket_upsert_and_list(repo):
+    ws, we, sf = _win()
+    rid = repo.create_run(ws, we, sf, "deepseek-v3.2", "task_a_cov")
+    n1 = repo.insert_newsletter(rid, "en_only", "/a/me.html", "<b>me</b>", 3, bucket="middle_east")
+    n2 = repo.insert_newsletter(rid, "en_only", "/a/na.html", "<b>na</b>", 1, bucket="north_africa")
+    assert n1 != n2
+    # re-render same bucket -> same row, content updated, status reset
+    repo.update_newsletter_send(n1, "sent")
+    n1b = repo.insert_newsletter(rid, "en_only", "/a/me2.html", "<b>me2</b>", 4, bucket="middle_east")
+    assert n1b == n1
+    rows = {r["bucket"]: r for r in repo.newsletters_for_run(rid)}
+    assert rows["middle_east"]["record_count"] == 4
+    assert rows["middle_east"]["email_html"] == "<b>me2</b>"
+    assert rows["middle_east"]["send_status"] == "pending"  # reset on re-render
+    assert set(rows) == {"middle_east", "north_africa"}
+
+
+@requires_db
 def test_region_summary_upsert_and_get(repo):
     ws, we, sf = _win()
     rid = repo.create_run(ws, we, sf, "deepseek-v3.2", "task_a_cov")

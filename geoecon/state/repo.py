@@ -230,11 +230,25 @@ class Repo:
             (fingerprint, run_id, run_id, expires))
 
     # ---- newsletters ----
-    def insert_newsletter(self, run_id, render_mode, archive_html_path, email_html, record_count) -> int:
+    def insert_newsletter(self, run_id, render_mode, archive_html_path, email_html,
+                          record_count, bucket=None) -> int:
         return self.conn.execute(
-            """INSERT INTO newsletters(run_id, render_mode, archive_html_path, email_html, record_count)
-               VALUES (%s,%s,%s,%s,%s) RETURNING newsletter_id""",
-            (run_id, render_mode, archive_html_path, email_html, record_count)).fetchone()[0]
+            """INSERT INTO newsletters(run_id, render_mode, archive_html_path, email_html,
+                 record_count, bucket)
+               VALUES (%s,%s,%s,%s,%s,%s)
+               ON CONFLICT (run_id, bucket) DO UPDATE SET
+                 render_mode=EXCLUDED.render_mode, archive_html_path=EXCLUDED.archive_html_path,
+                 email_html=EXCLUDED.email_html, record_count=EXCLUDED.record_count,
+                 send_status='pending', send_error=NULL
+               RETURNING newsletter_id""",
+            (run_id, render_mode, archive_html_path, email_html, record_count, bucket)).fetchone()[0]
+
+    def newsletters_for_run(self, run_id) -> list[dict]:
+        rows = self.conn.execute(
+            "SELECT newsletter_id, bucket, record_count, email_html, send_status "
+            "FROM newsletters WHERE run_id=%s ORDER BY bucket", (run_id,)).fetchall()
+        return [{"newsletter_id": r[0], "bucket": r[1], "record_count": r[2],
+                 "email_html": r[3], "send_status": r[4]} for r in rows]
 
     def update_newsletter_send(self, newsletter_id, send_status, send_error=None):
         self.conn.execute(

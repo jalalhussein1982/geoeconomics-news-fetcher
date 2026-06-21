@@ -76,6 +76,27 @@ def test_url_hash_stable():
     assert gdelt.url_hash("http://a/b") == gdelt.url_hash("http://a/b")
 
 
+def test_discovery_persists_country_and_keeps_bucketed(monkeypatch):
+    lines = [_line("x1"), _line("x2")]  # fixture country = SA (Saudi -> middle_east)
+    captured = []
+
+    class FakeRepo:
+        def insert_article(self, run_id, **kw):
+            captured.append(kw)
+            return len(captured)
+
+    from geoecon.stages import discovery
+    from geoecon.config import Config
+    cfg = Config.from_env({
+        "DB_DSN": "x", "MAETCENTRUM_KEY": "k", "SMTP_HOST": "h", "SMTP_USER": "u",
+        "SMTP_PASSWORD": "p", "FROM_ADDR": "f", "RECIPIENTS": "r@x",
+    })
+    metrics = discovery.run(cfg, FakeRepo(), run_id=1, fetch=lambda ws, we: lines)
+    assert metrics["discovered"] == 2
+    assert all(c["country_fips"] == "SA" for c in captured)
+    assert all(c["region"] == "MENA" for c in captured)  # coarse legacy tag preserved
+
+
 def test_discovery_run_inserts_and_caps(monkeypatch):
     # 3 DISTINCT URLs so url_hash dedup does not collapse them
     lines = [_line("x1"), _line("x2"), _line("x3")]

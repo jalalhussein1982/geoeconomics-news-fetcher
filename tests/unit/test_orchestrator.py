@@ -43,3 +43,10 @@ def test_stage_failure_marks_failed_and_stops():
     with pytest.raises(RuntimeError):
         orchestrator.run_pipeline(_cfg(), repo, now=datetime(2026,6,19,5,tzinfo=timezone.utc), stages=stages)
     assert ("fail", "discovery") in repo.calls and repo.status == "failed"
+
+def test_default_stages_include_summary_in_order():
+    from geoecon import orchestrator
+    cfg = _cfg()
+    names = [name for name, _fn in orchestrator._default_stages(cfg, client=None)]
+    assert names == ["discovery", "extraction", "cluster", "synthesis", "summary", "render", "send"]
+    assert names.index("summary") < names.index("render") < names.index("send")

@@ -102,3 +102,157 @@ def test_mark_emitted_marks_only_ok_clusters(repo):
     assert seen_a["times_seen"] == 1
     assert seen_a["last_emitted_at"] is not None
     assert repo.get_seen("fpB") is None
+
+@requires_db
+def test_records_for_buckets_carries_country_and_source(repo):
+    ws, we, sf = _win()
+    rid = repo.create_run(ws, we, sf, "deepseek-v3.2", "task_a_cov")
+    aid = repo.insert_article(rid, source_url="https://reuters.com/x", url_hash="h",
+                              domain="reuters.com", region="MENA", gkg_themes=[],
+                              title="t", country_fips="EG")
+    cid = repo.insert_cluster(rid, "fp1", "MENA", ["en"], 1, country_fips="EG")
+    repo.add_membership(cid, aid)
+    repo.upsert_synthesis_record(rid, cid, {"headline_en": "A"}, "ok")
+    out = repo.records_for_buckets(rid)
+    assert len(out) == 1
+    rec, country, sources = out[0]
+    assert rec.fields["headline_en"] == "A"
+    assert country == "EG"
+    assert sources == [{"url": "https://reuters.com/x", "domain": "reuters.com"}]
+
+@requires_db
+def test_migration_adds_country_and_per_region_newsletters(repo):
+    ws, we, sf = _win()
+    rid = repo.create_run(ws, we, sf, "deepseek-v3.2", "task_a_cov")
+    # articles.country_fips column exists (raw insert; repo keyword arrives in a later task)
+    repo.conn.execute(
+        "INSERT INTO articles(run_id, source_url, url_hash, region, country_fips) "
+        "VALUES (%s,'u','h','MENA','EG')", (rid,))
+    assert repo.conn.execute(
+        "SELECT country_fips FROM articles WHERE run_id=%s", (rid,)).fetchone()[0] == "EG"
+    # clusters.country_fips column exists
+    repo.conn.execute(
+        "INSERT INTO clusters(run_id, event_fingerprint, region, country_fips, article_count) "
+        "VALUES (%s,'fp','MENA','EG',1)", (rid,))
+    assert repo.conn.execute(
+        "SELECT country_fips FROM clusters WHERE run_id=%s", (rid,)).fetchone()[0] == "EG"
+    # newsletters: two rows for same run, different bucket -> allowed by UNIQUE(run_id,bucket)
+    repo.conn.execute(
+        "INSERT INTO newsletters(run_id, render_mode, record_count, bucket) "
+        "VALUES (%s,'en_only',0,'middle_east'),(%s,'en_only',0,'north_africa')", (rid, rid))
+    assert repo.conn.execute(
+        "SELECT count(*) FROM newsletters WHERE run_id=%s", (rid,)).fetchone()[0] == 2
+    # region_summaries table exists and round-trips
+    repo.conn.execute(
+        "INSERT INTO region_summaries(run_id, bucket, lede_en) VALUES (%s,'latam','hi')", (rid,))
+    assert repo.conn.execute(
+        "SELECT lede_en FROM region_summaries WHERE run_id=%s AND bucket='latam'",
+        (rid,)).fetchone()[0] == "hi"
+    # 'summary' is now an allowed stage_name (CHECK updated)
+    repo.start_stage(rid, "summary")  # raises if CHECK rejects 'summary'
+
+
+@requires_db
+def test_records_for_buckets_aggregates_multiple_articles(repo):
+    ws, we, sf = _win()
+    rid = repo.create_run(ws, we, sf, "deepseek-v3.2", "task_a_cov")
+    a1 = repo.insert_article(rid, source_url="https://a.com/x", url_hash="h1",
+                             domain="a.com", region="MENA", title="t", country_fips="EG")
+    a2 = repo.insert_article(rid, source_url="https://b.com/y", url_hash="h2",
+                             domain="b.com", region="MENA", title="t", country_fips="EG")
+    cid = repo.insert_cluster(rid, "fp1", "MENA", ["en"], 2, country_fips="EG")
+    repo.add_membership(cid, a1)
+    repo.add_membership(cid, a2)
+    repo.upsert_synthesis_record(rid, cid, {"headline_en": "A"}, "ok")
+    out = repo.records_for_buckets(rid)
+    assert len(out) == 1                       # one tuple per record
+    _rec, country, sources = out[0]
+    assert country == "EG"
+    assert {s["url"] for s in sources} == {"https://a.com/x", "https://b.com/y"}
+
+
+@requires_db
+def test_records_for_buckets_no_member_article_has_empty_sources(repo):
+    ws, we, sf = _win()
+    rid = repo.create_run(ws, we, sf, "deepseek-v3.2", "task_a_cov")
+    cid = repo.insert_cluster(rid, "fp1", "MENA", ["en"], 0, country_fips="EG")
+    repo.upsert_synthesis_record(rid, cid, {"headline_en": "A"}, "ok")
+    out = repo.records_for_buckets(rid)
+    assert len(out) == 1
+    _rec, country, sources = out[0]
+    assert country == "EG" and sources == []
+
+
+@requires_db
+def test_records_for_buckets_excludes_non_ok(repo):
+    ws, we, sf = _win()
+    rid = repo.create_run(ws, we, sf, "deepseek-v3.2", "task_a_cov")
+    cid = repo.insert_cluster(rid, "fp1", "MENA", ["en"], 0, country_fips="EG")
+    repo.upsert_synthesis_record(rid, cid, {"headline_en": "held"}, "zero_entities")
+    assert repo.records_for_buckets(rid) == []
+
+
+@requires_db
+def test_newsletter_per_bucket_upsert_and_list(repo):
+    ws, we, sf = _win()
+    rid = repo.create_run(ws, we, sf, "deepseek-v3.2", "task_a_cov")
+    n1 = repo.insert_newsletter(rid, "en_only", "/a/me.html", "<b>me</b>", 3, bucket="middle_east")
+    n2 = repo.insert_newsletter(rid, "en_only", "/a/na.html", "<b>na</b>", 1, bucket="north_africa")
+    assert n1 != n2
+    # re-render same bucket -> same row, content updated, status reset
+    repo.update_newsletter_send(n1, "sent")
+    n1b = repo.insert_newsletter(rid, "en_only", "/a/me2.html", "<b>me2</b>", 4, bucket="middle_east")
+    assert n1b == n1
+    rows = {r["bucket"]: r for r in repo.newsletters_for_run(rid)}
+    assert rows["middle_east"]["record_count"] == 4
+    assert rows["middle_east"]["email_html"] == "<b>me2</b>"
+    assert rows["middle_east"]["send_status"] == "pending"  # reset on re-render
+    assert set(rows) == {"middle_east", "north_africa"}
+
+
+@requires_db
+def test_region_summary_upsert_and_get(repo):
+    ws, we, sf = _win()
+    rid = repo.create_run(ws, we, sf, "deepseek-v3.2", "task_a_cov")
+    repo.upsert_region_summary(rid, "middle_east", "Lede one.", ["a", "b"], "deepseek-v3.2", 2)
+    got = repo.get_region_summary(rid, "middle_east")
+    assert got["lede_en"] == "Lede one."
+    assert got["takeaways"] == ["a", "b"]
+    assert got["record_count"] == 2
+    # upsert overwrites
+    repo.upsert_region_summary(rid, "middle_east", "Lede two.", ["c"], "deepseek-v3.2", 1)
+    got2 = repo.get_region_summary(rid, "middle_east")
+    assert got2["lede_en"] == "Lede two." and got2["takeaways"] == ["c"]
+    assert repo.get_region_summary(rid, "latam") is None
+
+
+@requires_db
+def test_articles_for_run_includes_country_fips(repo):
+    ws, we, sf = _win()
+    rid = repo.create_run(ws, we, sf, "deepseek-v3.2", "task_a_cov")
+    repo.insert_article(rid, source_url="u", url_hash="h", region="MENA",
+                        country_fips="EG", title="t")
+    arts = repo.articles_for_run(rid)
+    assert arts[0].country_fips == "EG"
+
+
+@requires_db
+def test_cluster_run_persists_country_fips_via_repo(repo):
+    from geoecon.stages import cluster as cluster_stage
+    ws, we, sf = _win()
+    rid = repo.create_run(ws, we, sf, "deepseek-v3.2", "task_a_cov")
+    repo.insert_article(rid, source_url="u", url_hash="h", region="MENA",
+                        country_fips="EG", title="t")
+    cluster_stage.run(None, repo, rid)  # cluster.run ignores cfg
+    crow = repo.conn.execute(
+        "SELECT country_fips FROM clusters WHERE run_id=%s", (rid,)).fetchone()
+    assert crow[0] == "EG"
+
+
+@requires_db
+def test_synthesis_remains_allowed_stage_name(repo):
+    ws, we, sf = _win()
+    rid = repo.create_run(ws, we, sf, "deepseek-v3.2", "task_a_cov")
+    repo.start_stage(rid, "synthesis")   # must not raise (CHECK must include 'synthesis')
+    repo.complete_stage(rid, "synthesis")
+    assert "synthesis" in repo.completed_stages(rid)

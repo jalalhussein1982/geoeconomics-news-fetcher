@@ -16,6 +16,7 @@ class Article:
     title: str | None
     body: str | None
     fetch_status: str
+    country_fips: str | None = None
 
 @dataclass
 class Cluster:
@@ -25,6 +26,7 @@ class Cluster:
     languages: list[str]
     article_count: int
     framing_divergent: bool
+    country_fips: str | None = None
 
 @dataclass
 class SynthesisRecord:

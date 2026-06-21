@@ -6,31 +6,34 @@ from .config import Config
 log = logging.getLogger("geoecon.orchestrator")
 
 def _default_stages(cfg, client):
-    from .stages import discovery, extract, cluster, synth, render, send
+    from .stages import discovery, extract, cluster, synth, summary, render, send
+    from . import regions
     date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     state = {}
     def _discovery(c, r, rid): state["m"] = discovery.run(c, r, rid); return state["m"]
-    def _extract(c, r, rid):  return extract.run(c, r, rid)
-    def _cluster(c, r, rid):  return cluster.run(c, r, rid)
-    def _synth(c, r, rid):    return synth.run(c, r, rid, client)
+    def _extract(c, r, rid):   return extract.run(c, r, rid)
+    def _cluster(c, r, rid):   return cluster.run(c, r, rid)
+    def _synth(c, r, rid):     return synth.run(c, r, rid, client)
+    def _summary(c, r, rid):   return summary.run(c, r, rid, client)
     def _render(c, r, rid):
         out = render.run(c, r, rid, date_str, stats=state.get("m"))
-        state["render"] = out; return {"record_count": out["record_count"]}
+        return {"record_count": out["record_count"], "newsletters": out["newsletters"]}
     def _send(c, r, rid):
-        out = state.get("render") or r.get_newsletter(rid)
-        if out is None:
-            raise RuntimeError("send: render stage completed but no newsletter row found")
         if c.dry_run:
             log.info("dry-run: skipping send"); return {"send_status": "skipped"}
-        if out["record_count"] == 0 and not c.send_heartbeat:
+        newsletters = r.newsletters_for_run(rid)
+        if not newsletters:
             return {"send_status": "skipped_empty"}
-        subject = f"Geoeconomic Brief — {date_str}"
-        result = send.run(c, r, out["newsletter_id"], subject, out["email_html"])
-        if result.get("send_status") == "sent":
+        def subject_for(bucket):
+            display = regions.BUCKET_DISPLAY.get(bucket, bucket or "")
+            return f"Geoeconomic Brief — {display} — {date_str}"
+        out = send.send_pending(c, r, newsletters, subject_for)
+        if out["all_sent"]:
             r.mark_emitted(rid)
-        return result
+            return {"send_status": "sent", "sent": out["results"]}
+        raise RuntimeError(f"send: some regions failed to send: {out['results']}")
     return [("discovery", _discovery), ("extraction", _extract), ("cluster", _cluster),
-            ("synthesis", _synth), ("render", _render), ("send", _send)]
+            ("synthesis", _synth), ("summary", _summary), ("render", _render), ("send", _send)]
 
 def run_pipeline(cfg: Config, repo, *, now=None, stages=None, client=None) -> dict:
     now = now or datetime.now(timezone.utc)

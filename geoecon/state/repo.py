@@ -63,7 +63,7 @@ class Repo:
     def insert_article(self, run_id, *, source_url, url_hash, domain=None, region=None,
                        gkg_themes=None, gkg_tone=None, num_mentions=None, source_lang=None,
                        title=None, gdelt_gkg_id=None, canonical_url=None, published_at=None,
-                       discovered_via="gdelt") -> int:
+                       discovered_via="gdelt", country_fips=None) -> int:
         existing = self.conn.execute(
             "SELECT article_id FROM articles WHERE run_id=%s AND url_hash=%s",
             (run_id, url_hash)).fetchone()
@@ -71,11 +71,12 @@ class Repo:
             return existing[0]
         return self.conn.execute(
             """INSERT INTO articles(run_id, gdelt_gkg_id, source_url, canonical_url, url_hash,
-                 domain, discovered_via, region, gkg_themes, gkg_tone, num_mentions,
+                 domain, discovered_via, region, country_fips, gkg_themes, gkg_tone, num_mentions,
                  source_lang, title, published_at)
-               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING article_id""",
+               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING article_id""",
             (run_id, gdelt_gkg_id, source_url, canonical_url, url_hash, domain, discovered_via,
-             region, gkg_themes or [], gkg_tone, num_mentions, source_lang, title, published_at)
+             region, country_fips, gkg_themes or [], gkg_tone, num_mentions, source_lang, title,
+             published_at)
         ).fetchone()[0]
 
     def update_extraction(self, article_id, body, fetch_status, source_lang=None, fetch_error=None):
@@ -85,7 +86,7 @@ class Repo:
 
     def articles_for_run(self, run_id, fetch_status=None) -> list[Article]:
         q = ("SELECT article_id, source_url, url_hash, domain, region, gkg_themes, gkg_tone, "
-             "num_mentions, source_lang, title, body, fetch_status FROM articles WHERE run_id=%s")
+             "num_mentions, source_lang, title, body, fetch_status, country_fips FROM articles WHERE run_id=%s")
         params: tuple = (run_id,)
         if fetch_status:
             q += " AND fetch_status=%s"; params += (fetch_status,)
@@ -93,11 +94,13 @@ class Repo:
 
     # ---- clusters ----
     def insert_cluster(self, run_id, event_fingerprint, region, languages, article_count,
-                       framing_divergent=False) -> int:
+                       framing_divergent=False, country_fips=None) -> int:
         return self.conn.execute(
-            """INSERT INTO clusters(run_id, event_fingerprint, region, languages, article_count, framing_divergent)
-               VALUES (%s,%s,%s,%s,%s,%s) RETURNING cluster_id""",
-            (run_id, event_fingerprint, region, languages, article_count, framing_divergent)).fetchone()[0]
+            """INSERT INTO clusters(run_id, event_fingerprint, region, country_fips,
+                 languages, article_count, framing_divergent)
+               VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING cluster_id""",
+            (run_id, event_fingerprint, region, country_fips, languages, article_count,
+             framing_divergent)).fetchone()[0]
 
     def add_membership(self, cluster_id, article_id, frame_label=None):
         self.conn.execute(
@@ -166,6 +169,45 @@ class Repo:
                 quality_flag="ok", is_headline_only=r[12]))
         return out
 
+    def records_for_buckets(self, run_id) -> list[tuple[SynthesisRecord, str | None, list[dict]]]:
+        """OK records with their cluster country_fips and verified source link(s).
+
+        Returns [(SynthesisRecord, country_fips, [{"url","domain"}, ...]), ...],
+        one tuple per record. Source links come from articles.source_url (verified
+        GDELT URLs), NOT the LLM 'sources' field.
+        """
+        rows = self.conn.execute(
+            """SELECT s.record_id, s.cluster_id, s.headline_en, s.headline_original,
+                 s.headline_original_lang, s.what_happened_en, s.geoeconomic_significance_en,
+                 s.geoeconomic_vector, s.entities, s.key_figures, s.framing_divergence,
+                 s.sources, s.is_headline_only, c.country_fips, a.source_url, a.domain
+               FROM synthesis_records s
+               JOIN clusters c ON c.cluster_id = s.cluster_id
+               LEFT JOIN cluster_articles ca ON ca.cluster_id = c.cluster_id
+               LEFT JOIN articles a ON a.article_id = ca.article_id
+               WHERE s.run_id=%s AND s.synthesis_quality_flag='ok'
+               ORDER BY s.record_id, a.article_id""", (run_id,)).fetchall()
+        by_id: dict[int, list] = {}
+        order: list[int] = []
+        for r in rows:
+            rec_id = r[0]
+            if rec_id not in by_id:
+                rec = SynthesisRecord(
+                    record_id=r[0], cluster_id=r[1],
+                    fields={"headline_en": r[2], "headline_original": r[3],
+                            "headline_original_lang": r[4], "what_happened_en": r[5],
+                            "geoeconomic_significance_en": r[6], "geoeconomic_vector": r[7],
+                            "entities": r[8], "key_figures": r[9], "framing_divergence": r[10],
+                            "sources": r[11]},
+                    quality_flag="ok", is_headline_only=r[12])
+                by_id[rec_id] = [rec, r[13], []]
+                order.append(rec_id)
+            if r[14]:  # source_url present
+                src = {"url": r[14], "domain": r[15]}
+                if src not in by_id[rec_id][2]:
+                    by_id[rec_id][2].append(src)
+        return [tuple(by_id[i]) for i in order]
+
     # ---- seen-store ----
     def get_seen(self, fingerprint) -> dict | None:
         row = self.conn.execute(
@@ -188,11 +230,25 @@ class Repo:
             (fingerprint, run_id, run_id, expires))
 
     # ---- newsletters ----
-    def insert_newsletter(self, run_id, render_mode, archive_html_path, email_html, record_count) -> int:
+    def insert_newsletter(self, run_id, render_mode, archive_html_path, email_html,
+                          record_count, bucket=None) -> int:
         return self.conn.execute(
-            """INSERT INTO newsletters(run_id, render_mode, archive_html_path, email_html, record_count)
-               VALUES (%s,%s,%s,%s,%s) RETURNING newsletter_id""",
-            (run_id, render_mode, archive_html_path, email_html, record_count)).fetchone()[0]
+            """INSERT INTO newsletters(run_id, render_mode, archive_html_path, email_html,
+                 record_count, bucket)
+               VALUES (%s,%s,%s,%s,%s,%s)
+               ON CONFLICT (run_id, bucket) DO UPDATE SET
+                 render_mode=EXCLUDED.render_mode, archive_html_path=EXCLUDED.archive_html_path,
+                 email_html=EXCLUDED.email_html, record_count=EXCLUDED.record_count,
+                 send_status='pending', send_error=NULL
+               RETURNING newsletter_id""",
+            (run_id, render_mode, archive_html_path, email_html, record_count, bucket)).fetchone()[0]
+
+    def newsletters_for_run(self, run_id) -> list[dict]:
+        rows = self.conn.execute(
+            "SELECT newsletter_id, bucket, record_count, email_html, send_status "
+            "FROM newsletters WHERE run_id=%s ORDER BY bucket", (run_id,)).fetchall()
+        return [{"newsletter_id": r[0], "bucket": r[1], "record_count": r[2],
+                 "email_html": r[3], "send_status": r[4]} for r in rows]
 
     def update_newsletter_send(self, newsletter_id, send_status, send_error=None):
         self.conn.execute(
@@ -212,3 +268,22 @@ class Repo:
         for cl in self.clusters_for_run(run_id):
             if cl.cluster_id in ok_cluster_ids:
                 self.upsert_seen(cl.event_fingerprint, run_id)
+
+    # ---- region summaries ----
+    def upsert_region_summary(self, run_id, bucket, lede_en, takeaways, model, record_count):
+        self.conn.execute(
+            """INSERT INTO region_summaries(run_id, bucket, lede_en, takeaways, model, record_count)
+               VALUES (%s,%s,%s,%s,%s,%s)
+               ON CONFLICT (run_id, bucket) DO UPDATE SET
+                 lede_en=EXCLUDED.lede_en, takeaways=EXCLUDED.takeaways,
+                 model=EXCLUDED.model, record_count=EXCLUDED.record_count, created_at=now()""",
+            (run_id, bucket, lede_en, Jsonb(takeaways or []), model, record_count))
+
+    def get_region_summary(self, run_id, bucket) -> dict | None:
+        row = self.conn.execute(
+            "SELECT bucket, lede_en, takeaways, model, record_count "
+            "FROM region_summaries WHERE run_id=%s AND bucket=%s", (run_id, bucket)).fetchone()
+        if not row:
+            return None
+        return {"bucket": row[0], "lede_en": row[1], "takeaways": row[2],
+                "model": row[3], "record_count": row[4]}

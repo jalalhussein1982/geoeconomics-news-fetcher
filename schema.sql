@@ -55,7 +55,7 @@ CREATE TABLE stage_runs (
     run_id          BIGINT NOT NULL REFERENCES runs(run_id) ON DELETE CASCADE,
     stage_name      TEXT NOT NULL
                     CHECK (stage_name IN
-                        ('discovery','extraction','rss','cluster','summary','render','send')),
+                        ('discovery','extraction','rss','cluster','synthesis','summary','render','send')),
     status          TEXT NOT NULL DEFAULT 'pending'
                     CHECK (status IN ('pending','running','completed','failed','skipped')),
     started_at      TIMESTAMPTZ,

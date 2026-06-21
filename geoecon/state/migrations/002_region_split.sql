@@ -21,8 +21,8 @@ CREATE TABLE IF NOT EXISTS region_summaries (
     PRIMARY KEY (run_id, bucket)
 );
 
--- add the new 'summary' stage to the stage_runs CHECK
+-- add 'summary' and retain 'synthesis' in the stage_runs CHECK
 ALTER TABLE stage_runs DROP CONSTRAINT IF EXISTS stage_runs_stage_name_check;
 ALTER TABLE stage_runs ADD CONSTRAINT stage_runs_stage_name_check
     CHECK (stage_name IN
-        ('discovery','extraction','rss','cluster','summary','render','send'));
+        ('discovery','extraction','rss','cluster','synthesis','summary','render','send'));

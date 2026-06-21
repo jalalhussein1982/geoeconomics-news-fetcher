@@ -122,3 +122,20 @@ def test_discovery_run_inserts_and_caps(monkeypatch):
     metrics = discovery.run(cfg, FakeRepo(), run_id=1, fetch=lambda ws, we: lines)
     assert metrics["discovered"] == 3
     assert all(c["region"] == "MENA" for c in captured)
+
+
+def test_prefilter_ok_requires_one_economic_theme():
+    # one economic theme is enough now (recall up; gate restores precision)
+    assert gdelt.prefilter_ok(["ECON_INFLATION"]) is True
+    assert gdelt.prefilter_ok(["WB_1428_TRADE"]) is True
+    assert gdelt.prefilter_ok(["EPU_POLICY"]) is True
+    # geopolitics-only, no economic theme -> still excluded
+    assert gdelt.prefilter_ok(["MILITARY", "ARMEDCONFLICT"]) is False
+    # pure non-economic -> excluded
+    assert gdelt.prefilter_ok(["SPORTS", "WEATHER"]) is False
+    assert gdelt.prefilter_ok([]) is False
+
+
+def test_geopol_theme_prefixes_present():
+    assert "SANCTIONS" in gdelt.GEOPOL_THEME_PREFIXES
+    assert "EPU_CATS_GEOPOLITICAL" in gdelt.GEOPOL_THEME_PREFIXES

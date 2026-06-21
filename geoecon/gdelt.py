@@ -64,6 +64,16 @@ TARGET_THEME_PREFIXES = ("ECON_", "WB_", "EPU_")
 # is too broad; requiring at least one core hit keeps genuinely geoeconomic items.
 CORE_THEME_PREFIXES = ("ECON_", "EPU_")
 
+# Geopolitics theme prefixes (GDELT GKG). Candidates; trimmed against live data
+# per the diagnostic. The gate uses these as context; prefilter requires an
+# economic theme (recall), gate does precision.
+GEOPOL_THEME_PREFIXES: tuple[str, ...] = (
+    "SANCTIONS", "MILITARY", "ARMEDCONFLICT", "BLOCKADE", "MARITIME", "BORDER",
+    "ENERGY", "EPU_CATS_GEOPOLITICAL", "EPU_CATS_TRADE_POLICY",
+    "EPU_CATS_NATIONAL_SECURITY", "EPU_CATS_SOVEREIGN_DEBT_CURRENCY_CRISES",
+    "WB_2433_CONFLICT_AND_FRAGILITY", "CRISISLEX_", "TAX_TERROR",
+)
+
 
 @dataclass
 class GkgRecord:
@@ -121,6 +131,17 @@ def theme_salience(
         return 0.0
     hits = sum(1 for t in themes if any(t.startswith(p) for p in target_prefixes))
     return hits / len(themes)
+
+
+def prefilter_ok(themes, *, target_prefixes=TARGET_THEME_PREFIXES,
+                geopol_prefixes=GEOPOL_THEME_PREFIXES) -> bool:
+    """Cheap recall gate: keep if the article carries at least one economic theme.
+
+    Precision (is it geoeconomic? which region?) is decided later by the LLM gate.
+    geopol_prefixes is accepted for forward use/diagnostics but an economic theme
+    is the binding requirement.
+    """
+    return any(any(t.startswith(p) for p in target_prefixes) for t in themes)
 
 
 def parse_gkg_line(line: str) -> GkgRecord | None:

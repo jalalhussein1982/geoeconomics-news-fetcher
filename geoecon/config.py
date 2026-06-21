@@ -24,6 +24,7 @@ class Config:
     regions: tuple[str, ...] = ("MENA", "LatAm")
     buckets: tuple[str, ...] = BUCKET_ORDER
     gate_model: str = "deepseek-v3.2"
+    dedup_model: str = "deepseek-v3.2"
     gate_batch_size: int = 15
     region_cap: int = 12
     discovery_ceiling: int = 120
@@ -58,6 +59,7 @@ class Config:
             regions=_split(env.get("REGIONS", "MENA,LatAm")),
             buckets=_split(env.get("BUCKETS", ",".join(BUCKET_ORDER))),
             gate_model=env.get("GATE_MODEL", "deepseek-v3.2"),
+            dedup_model=env.get("DEDUP_MODEL", "deepseek-v3.2"),
             gate_batch_size=int(env.get("GATE_BATCH_SIZE", "15")),
             region_cap=int(env.get("REGION_CAP", "12")),
             discovery_ceiling=int(env.get("DISCOVERY_CEILING", "120")),

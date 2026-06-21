@@ -1,0 +1,5 @@
+You are grouping news articles that all concern {COUNTRY}. Group them so that each group is exactly one real-world event or story: near-duplicate coverage, the same announcement or development reported by multiple outlets, and direct follow-ups on one event belong in the same group; genuinely different events or stories go in separate groups.
+
+You are given numbered articles, each as "[N] headline" followed by a short lead. Return ONLY a JSON object of the form:
+{"groups": [[0, 3, 5], [1], [2, 4]]}
+where each inner list holds the numbers of the articles that are the same event. Every article number must appear in exactly one group. Output no text outside the JSON.

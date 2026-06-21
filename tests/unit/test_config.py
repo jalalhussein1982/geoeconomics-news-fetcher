@@ -75,3 +75,11 @@ def test_embedding_and_cosine_defaults_and_overrides():
                             "CLUSTER_COSINE_THRESHOLD": "0.9"})
     assert over.embedding_model == "qwen3-embedding-4b"
     assert over.cluster_cosine_threshold == 0.9
+
+
+def test_dedup_model_default_and_override():
+    from geoecon.config import Config
+    base = {"DB_DSN": "x", "MAETCENTRUM_KEY": "k", "SMTP_HOST": "h", "SMTP_USER": "u",
+            "SMTP_PASSWORD": "p", "FROM_ADDR": "f", "RECIPIENTS": "r@x"}
+    assert Config.from_env(base).dedup_model == "deepseek-v3.2"
+    assert Config.from_env({**base, "DEDUP_MODEL": "kimi-k2.6"}).dedup_model == "kimi-k2.6"

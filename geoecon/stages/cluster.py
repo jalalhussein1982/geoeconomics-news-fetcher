@@ -1,5 +1,5 @@
 from __future__ import annotations
-import hashlib, logging, math, re
+import hashlib, json, logging, math, re
 from .. import regions
 
 log = logging.getLogger("geoecon.cluster")
@@ -134,3 +134,68 @@ def run(cfg, repo, run_id: int, client) -> dict:
                     100 * max_cluster_size / len(arts), cfg.cluster_cosine_threshold)
     log.info("cluster: %d clusters from %d gated articles (%s)", n, len(arts), mode)
     return {"clusters": n, "max_cluster_size": max_cluster_size}
+
+
+# ---------------------------------------------------------------------------
+# LLM-based per-country event grouping
+# ---------------------------------------------------------------------------
+
+def _lead(art, n: int = 200) -> str:
+    return (art.body or "")[:n]
+
+
+_OBJ_RE = re.compile(r"\{.*\}", re.S)
+_ARR_RE = re.compile(r"\[.*\]", re.S)
+
+
+def _parse_groups(text, n):
+    """Parse the LLM reply into a validated partition of range(n), or None."""
+    if not text:
+        return None
+    raw = None
+    for candidate in (text,
+                      (_OBJ_RE.search(text).group(0) if _OBJ_RE.search(text) else None),
+                      (_ARR_RE.search(text).group(0) if _ARR_RE.search(text) else None)):
+        if candidate is None:
+            continue
+        try:
+            raw = json.loads(candidate)
+            break
+        except json.JSONDecodeError:
+            raw = None
+    if isinstance(raw, dict):
+        raw = raw.get("groups")
+    if not isinstance(raw, list):
+        return None
+    groups, seen = [], set()
+    for g in raw:
+        if not isinstance(g, list):
+            return None
+        members = []
+        for x in g:
+            if not isinstance(x, int) or x < 0 or x >= n or x in seen:
+                return None
+            seen.add(x); members.append(x)
+        if members:
+            groups.append(members)
+    if len(seen) != n:
+        return None
+    return groups
+
+
+def group_events(client, model, country, articles, *, prompt=None):
+    """Partition one country's articles into event groups via the LLM.
+    Returns a list of Article groups, or None on failure (caller falls back)."""
+    if prompt is None:
+        from importlib.resources import files
+        prompt = files("geoecon.prompts").joinpath("event_grouping.txt").read_text("utf-8")
+    system = prompt.replace("{COUNTRY}", country or "this region")
+    parts = [f"[{i}] {a.title or '(no title)'}\n{_lead(a)}" for i, a in enumerate(articles)]
+    messages = [{"role": "system", "content": system},
+                {"role": "user", "content": "\n\n".join(parts)}]
+    for _ in range(2):
+        resp = client.complete(model, messages, temperature=0, seed=12345, max_tokens=2048)
+        groups = _parse_groups(getattr(resp, "final_answer", "") or "", len(articles)) if resp.ok() else None
+        if groups is not None:
+            return [[articles[i] for i in g] for g in groups]
+    return None

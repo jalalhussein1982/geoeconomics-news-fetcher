@@ -71,3 +71,43 @@ def test_embedding_failure_falls_back_to_lexical():
     merged = [c for c in repo.clusters if c["count"] == 2][0]
     assert merged["country_fips"] == "SA" and abs(merged["gate_score"] - 0.9) < 1e-6
     assert merged["centroid"] is None               # lexical path stores no centroid
+
+
+# ---------------------------------------------------------------------------
+# LLM event-grouping tests
+# ---------------------------------------------------------------------------
+
+class _Resp:
+    def __init__(self, fa, ok=True): self.final_answer = fa; self._ok = ok
+    def ok(self): return self._ok
+
+class _LLM:
+    """complete() returns the next queued answer string."""
+    def __init__(self, answers): self._answers = list(answers); self.calls = []
+    def complete(self, model, messages, **kw):
+        self.calls.append((model, messages, kw)); return _Resp(self._answers.pop(0))
+
+
+def test_group_events_partitions_articles():
+    arts = [_art(1, "Bolivia declares state of emergency", country="BL"),
+            _art(2, "Bolivia emergency clears blockades", country="BL"),
+            _art(3, "Bolivia central bank raises rates", country="BL")]
+    llm = _LLM(['{"groups": [[0, 1], [2]]}'])
+    out = cluster_stage.group_events(llm, "m", "BL", arts, prompt="SYS {COUNTRY}")
+    assert [[a.article_id for a in g] for g in out] == [[1, 2], [3]]
+    # determinism + country interpolation
+    assert llm.calls[0][2]["temperature"] == 0 and llm.calls[0][2]["seed"] == 12345
+    assert "BL" in llm.calls[0][1][0]["content"]
+
+
+def test_group_events_returns_none_on_bad_json_after_retry():
+    arts = [_art(1, "x", country="BL"), _art(2, "y", country="BL")]
+    llm = _LLM(["not json", "still not json"])
+    assert cluster_stage.group_events(llm, "m", "BL", arts, prompt="SYS") is None
+    assert len(llm.calls) == 2          # retried once
+
+
+def test_parse_groups_rejects_non_partition():
+    assert cluster_stage._parse_groups('{"groups": [[0]]}', 2) is None     # missing index 1
+    assert cluster_stage._parse_groups('{"groups": [[0,1],[1]]}', 2) is None  # dup index
+    assert cluster_stage._parse_groups('{"groups": [[0],[1]]}', 2) == [[0], [1]]

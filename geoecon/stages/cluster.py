@@ -20,7 +20,8 @@ def run(cfg, repo, run_id: int) -> dict:
             continue
         fp = fingerprint(art.title, art.source_url)
         langs = [art.source_lang] if art.source_lang else []
-        cid = repo.insert_cluster(run_id, fp, art.region, langs, 1)
+        cid = repo.insert_cluster(run_id, fp, art.region, langs, 1,
+                                  country_fips=art.country_fips)
         repo.add_membership(cid, art.article_id)
         n += 1
     log.info("cluster(P1): %d clusters", n)

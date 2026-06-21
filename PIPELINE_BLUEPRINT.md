@@ -222,3 +222,17 @@ Surface forms stored in **both** source-language original and English; synthesis
 **Per-region newsletters**: render produces one newsletter per non-empty bucket, stored with a `bucket` label in `newsletters`. Source links in the rendered HTML come from `articles.source_url` (the verified fetched URL), not from the LLM `sources` field. Empty buckets are silently skipped; a run with no content produces no newsletters and sends nothing.
 
 **Delivery**: `send` iterates `newsletters_for_run`; if there are no newsletters it returns `skipped_empty`. All newsletters go to the same `cfg.recipients` list (no per-region address splitting).
+
+---
+
+## 13. Capture-quality overhaul (gate, relaxed discovery, dedup, per-region cap)
+
+**Geoeconomic relevance + region gate** (`geoecon/stages/gate.py`): a `gate` stage runs after extraction; it sends articles to the LLM in batches (`cfg.gate_batch_size`, default 15) asking two questions per article — is it geoeconomic, and which in-scope country does it concern? An article is kept only if it is geoeconomic AND resolves to an active region bucket; kept articles have their `country_fips` set/overwritten to the gate-resolved value; dropped articles have `country_fips` set to NULL. On JSON parse failure the gate retries once then fails open (marks `geoeconomic=True, score=0.0, reason="gate_unparsed"`, keeping the article's existing discovery-time `country_fips` rather than nulling it). Gate verdict columns (`gate_geoeconomic`, `gate_score`, `gate_country`, `gate_reason`) are persisted on `articles`; `clusters.gate_score` carries the primary article's score.
+
+**Relaxed discovery prefilter + per-bucket ceiling**: the GDELT prefilter threshold was relaxed to ≥1 economic theme (precision is now the gate's job, not the prefilter's). The old global 150/day extraction cap is replaced by a per-bucket ceiling (`cfg.discovery_ceiling`, default 120): articles are salience-sorted and each bucket fills independently up to that ceiling; Egypt counts against both its buckets, but is kept if either bucket is under ceiling.
+
+**Lexical near-dup merge in clustering**: after gate filtering, clusters now merge near-duplicate articles (same `country_fips` + title-token Jaccard ≥ `cfg.dedup_jaccard`, default 0.6) into multi-article clusters via union-find; titleless articles remain standalone. The primary article (highest `gate_score`) sets the cluster's `country_fips` and `gate_score`.
+
+**Per-region cap + clean key-figures (render/summary)**: both the summary and render stages select the top `cfg.region_cap` (default 12) records per bucket ranked by gate score (`regions.top_per_bucket`). Key figures are rendered via a spaced, de-duplicated `figures_text` field (value + unit, space-joined and `·`-separated; the unit is not re-appended when the value already ends with it; no `gloss_en` prose) computed as a transient attribute on the synthesis record.
+
+**New config knobs** (all have env-var overrides): `gate_model` (`GATE_MODEL`, default `deepseek-v3.2`), `gate_batch_size` (`GATE_BATCH_SIZE`, default 15), `region_cap` (`REGION_CAP`, default 12), `discovery_ceiling` (`DISCOVERY_CEILING`, default 120), `dedup_jaccard` (`DEDUP_JACCARD`, default 0.6).

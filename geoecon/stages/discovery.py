@@ -11,7 +11,6 @@ from ..config import Config
 log = logging.getLogger("geoecon.discovery")
 
 MASTER_LATEST = "http://data.gdeltproject.org/gdeltv2/lastupdate.txt"
-CEILING = 150
 
 
 def _default_fetch(window_start: datetime, window_end: datetime) -> list[str]:
@@ -68,7 +67,7 @@ def run(
         if rec is None:
             skipped += 1
             continue
-        if not gdelt.theme_intersection_ok(rec.themes):
+        if not gdelt.prefilter_ok(rec.themes):
             continue
         region = gdelt.region_for_country(rec.country)
         if not regions.buckets_for_country(rec.country, cfg.buckets):
@@ -79,11 +78,18 @@ def run(
         seen_hashes.add(h)
         kept.append((rec, region, h))
 
-    # Salience proxy: target-theme density desc (focused economic coverage over
-    # sprawling omnibus articles); cap at CEILING (or cfg.limit).
+    # Per-bucket cap by salience proxy; LLM gate makes the final selection.
     kept.sort(key=lambda x: gdelt.theme_salience(x[0].themes), reverse=True)
-    ceiling = cfg.limit or CEILING
-    kept = kept[:ceiling]
+    ceiling = cfg.limit or cfg.discovery_ceiling
+    per_bucket: dict[str, int] = {}
+    capped: list[tuple] = []
+    for rec, region, h in kept:
+        bs = regions.buckets_for_country(rec.country, cfg.buckets)
+        if any(per_bucket.get(b, 0) < ceiling for b in bs):
+            for b in bs:
+                per_bucket[b] = per_bucket.get(b, 0) + 1
+            capped.append((rec, region, h))
+    kept = capped
 
     for rec, region, h in kept:
         repo.insert_article(

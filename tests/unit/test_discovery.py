@@ -139,3 +139,22 @@ def test_prefilter_ok_requires_one_economic_theme():
 def test_geopol_theme_prefixes_present():
     assert "SANCTIONS" in gdelt.GEOPOL_THEME_PREFIXES
     assert "EPU_CATS_GEOPOLITICAL" in gdelt.GEOPOL_THEME_PREFIXES
+
+
+def test_discovery_caps_per_bucket(monkeypatch):
+    # 3 distinct SA (middle_east) lines; ceiling per bucket = 2 -> keep 2
+    lines = [_line("s1"), _line("s2"), _line("s3")]
+    captured = []
+    class FakeRepo:
+        def insert_article(self, run_id, **kw):
+            captured.append(kw); return len(captured)
+    from geoecon.stages import discovery
+    from geoecon.config import Config
+    cfg = Config.from_env({
+        "DB_DSN": "x", "MAETCENTRUM_KEY": "k", "SMTP_HOST": "h", "SMTP_USER": "u",
+        "SMTP_PASSWORD": "p", "FROM_ADDR": "f", "RECIPIENTS": "r@x",
+        "DISCOVERY_CEILING": "2",
+    })
+    metrics = discovery.run(cfg, FakeRepo(), run_id=1, fetch=lambda ws, we: lines)
+    assert metrics["discovered"] == 2  # capped at 2 for the middle_east bucket
+    assert all(c["country_fips"] == "SA" for c in captured)

@@ -241,9 +241,12 @@ def test_cluster_run_persists_country_fips_via_repo(repo):
     from geoecon.stages import cluster as cluster_stage
     ws, we, sf = _win()
     rid = repo.create_run(ws, we, sf, "deepseek-v3.2", "task_a_cov")
-    repo.insert_article(rid, source_url="u", url_hash="h", region="MENA",
-                        country_fips="EG", title="t")
-    cluster_stage.run(None, repo, rid)  # cluster.run ignores cfg
+    aid = repo.insert_article(rid, source_url="u", url_hash="h", region="MENA",
+                              country_fips="EG", title="t")
+    repo.upsert_gate(aid, geoeconomic=True, score=0.8, country="Egypt",
+                     reason="trade", country_fips="EG")
+    cfg = type("C", (), {"buckets": ("middle_east", "north_africa"), "dedup_jaccard": 0.6})()
+    cluster_stage.run(cfg, repo, rid)
     crow = repo.conn.execute(
         "SELECT country_fips FROM clusters WHERE run_id=%s", (rid,)).fetchone()
     assert crow[0] == "EG"

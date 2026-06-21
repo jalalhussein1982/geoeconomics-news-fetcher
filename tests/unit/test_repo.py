@@ -259,6 +259,24 @@ def test_synthesis_remains_allowed_stage_name(repo):
 
 
 @requires_db
+def test_update_extraction_sets_title_and_upsert_gate(repo):
+    ws, we, sf = _win()
+    rid = repo.create_run(ws, we, sf, "deepseek-v3.2", "task_a_cov")
+    aid = repo.insert_article(rid, source_url="u", url_hash="h", region="MENA",
+                              country_fips="EG")
+    repo.update_extraction(aid, "body text here", "extracted", title="A Real Headline")
+    arts = {a.article_id: a for a in repo.articles_for_run(rid)}
+    assert arts[aid].title == "A Real Headline"
+    assert arts[aid].body == "body text here"
+    # gate overwrites country_fips + records verdict
+    repo.upsert_gate(aid, geoeconomic=True, score=0.77, country="Egypt",
+                     reason="econ x geopolitics", country_fips="EG")
+    a = {x.article_id: x for x in repo.articles_for_run(rid)}[aid]
+    assert a.gate_geoeconomic is True and abs(a.gate_score - 0.77) < 1e-6
+    assert a.gate_country == "Egypt" and a.country_fips == "EG"
+
+
+@requires_db
 def test_migration_003_gate_columns_and_stage(repo):
     ws, we, sf = _win()
     rid = repo.create_run(ws, we, sf, "deepseek-v3.2", "task_a_cov")

@@ -79,14 +79,25 @@ class Repo:
              published_at)
         ).fetchone()[0]
 
-    def update_extraction(self, article_id, body, fetch_status, source_lang=None, fetch_error=None):
+    def update_extraction(self, article_id, body, fetch_status, source_lang=None,
+                          fetch_error=None, title=None):
         self.conn.execute(
-            "UPDATE articles SET body=%s, fetch_status=%s, source_lang=COALESCE(%s, source_lang), fetch_error=%s WHERE article_id=%s",
-            (body, fetch_status, source_lang, fetch_error, article_id))
+            "UPDATE articles SET body=%s, fetch_status=%s, "
+            "source_lang=COALESCE(%s, source_lang), fetch_error=%s, "
+            "title=COALESCE(%s, title) WHERE article_id=%s",
+            (body, fetch_status, source_lang, fetch_error, title, article_id))
+
+    def upsert_gate(self, article_id, *, geoeconomic, score, country, reason, country_fips):
+        self.conn.execute(
+            "UPDATE articles SET gate_geoeconomic=%s, gate_score=%s, gate_country=%s, "
+            "gate_reason=%s, country_fips=%s WHERE article_id=%s",
+            (geoeconomic, score, country, reason, country_fips, article_id))
 
     def articles_for_run(self, run_id, fetch_status=None) -> list[Article]:
         q = ("SELECT article_id, source_url, url_hash, domain, region, gkg_themes, gkg_tone, "
-             "num_mentions, source_lang, title, body, fetch_status, country_fips FROM articles WHERE run_id=%s")
+             "num_mentions, source_lang, title, body, fetch_status, country_fips, "
+             "gate_geoeconomic, gate_score, gate_country, gate_reason "
+             "FROM articles WHERE run_id=%s")
         params: tuple = (run_id,)
         if fetch_status:
             q += " AND fetch_status=%s"; params += (fetch_status,)

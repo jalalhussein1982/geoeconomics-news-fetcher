@@ -69,12 +69,9 @@ def test_embedding_and_cosine_defaults_and_overrides():
     base = {"DB_DSN": "x", "MAETCENTRUM_KEY": "k", "SMTP_HOST": "h", "SMTP_USER": "u",
             "SMTP_PASSWORD": "p", "FROM_ADDR": "f", "RECIPIENTS": "r@x"}
     cfg = Config.from_env(base)
-    assert cfg.embedding_model == "multilingual-e5-large-instruct"
-    assert cfg.cluster_cosine_threshold == 0.98
-    over = Config.from_env({**base, "EMBEDDING_MODEL": "qwen3-embedding-4b",
-                            "CLUSTER_COSINE_THRESHOLD": "0.9"})
+    assert cfg.embedding_model is None
+    over = Config.from_env({**base, "EMBEDDING_MODEL": "qwen3-embedding-4b"})
     assert over.embedding_model == "qwen3-embedding-4b"
-    assert over.cluster_cosine_threshold == 0.9
 
 
 def test_dedup_model_default_and_override():

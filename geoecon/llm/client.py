@@ -136,43 +136,6 @@ class LLMClient:
                 time.sleep(min(2 ** attempt + random.random(), 30))
         return LLMResponse(model, "", 0, datetime.now(timezone.utc).isoformat(), error=last_err)
 
-    def embed(self, model, texts, *, batch_size=64):
-        """Return one embedding vector per input text (input order), or None if the
-        endpoint fails after retries. Model-agnostic: sends `input` verbatim."""
-        url = f"{self.base_url}/embeddings"
-        headers = {"Authorization": f"Bearer {self._api_key}", "Content-Type": "application/json"}
-        out = []
-        for start in range(0, len(texts), batch_size):
-            batch = texts[start:start + batch_size]
-            data = None
-            for attempt in range(self.max_retries + 1):
-                try:
-                    r = self.session.post(url, headers=headers,
-                                          json={"model": model, "input": batch},
-                                          timeout=self.timeout_s)
-                except requests.RequestException:
-                    pass
-                else:
-                    if r.status_code == 200:
-                        data = r.json(); break
-                    if r.status_code not in self.RETRYABLE:
-                        return None
-                if attempt < self.max_retries:
-                    time.sleep(min(2 ** attempt + random.random(), 30))
-            if data is None:
-                return None
-            items = data.get("data") or []
-            if len(items) != len(batch):
-                return None
-            if any(not isinstance(it.get("index"), int) for it in items):
-                return None
-            for it in sorted(items, key=lambda x: x.get("index", 0)):
-                vec = it.get("embedding")
-                if not isinstance(vec, list) or not vec:
-                    return None
-                out.append(vec)
-        return out
-
     @staticmethod
     def _parse(model, data, latency_ms, ts) -> LLMResponse:
         choice = (data.get("choices") or [{}])[0]

@@ -246,9 +246,15 @@ def test_cluster_run_persists_country_fips_via_repo(repo):
     repo.upsert_gate(aid, geoeconomic=True, score=0.8, country="Egypt",
                      reason="trade", country_fips="EG")
     cfg = type("C", (), {"buckets": ("middle_east", "north_africa"), "dedup_jaccard": 0.6,
-                         "embedding_model": "e5", "cluster_cosine_threshold": 0.85})()
-    client = type("C", (), {"embed": lambda self, m, t: None})()
-    cluster_stage.run(cfg, repo, rid, client)
+                         "dedup_model": "m"})()
+
+    class _LLM:
+        def complete(self, model, messages, **kw):
+            class R:
+                final_answer = "force-fallback"
+                def ok(self): return True
+            return R()
+    cluster_stage.run(cfg, repo, rid, _LLM())
     crow = repo.conn.execute(
         "SELECT country_fips FROM clusters WHERE run_id=%s", (rid,)).fetchone()
     assert crow[0] == "EG"

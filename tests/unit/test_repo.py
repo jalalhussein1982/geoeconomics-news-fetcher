@@ -102,3 +102,34 @@ def test_mark_emitted_marks_only_ok_clusters(repo):
     assert seen_a["times_seen"] == 1
     assert seen_a["last_emitted_at"] is not None
     assert repo.get_seen("fpB") is None
+
+@requires_db
+def test_migration_adds_country_and_per_region_newsletters(repo):
+    ws, we, sf = _win()
+    rid = repo.create_run(ws, we, sf, "deepseek-v3.2", "task_a_cov")
+    # articles.country_fips column exists (raw insert; repo keyword arrives in a later task)
+    repo.conn.execute(
+        "INSERT INTO articles(run_id, source_url, url_hash, region, country_fips) "
+        "VALUES (%s,'u','h','MENA','EG')", (rid,))
+    assert repo.conn.execute(
+        "SELECT country_fips FROM articles WHERE run_id=%s", (rid,)).fetchone()[0] == "EG"
+    # clusters.country_fips column exists
+    repo.conn.execute(
+        "INSERT INTO clusters(run_id, event_fingerprint, region, country_fips, article_count) "
+        "VALUES (%s,'fp','MENA','EG',1)", (rid,))
+    assert repo.conn.execute(
+        "SELECT country_fips FROM clusters WHERE run_id=%s", (rid,)).fetchone()[0] == "EG"
+    # newsletters: two rows for same run, different bucket -> allowed by UNIQUE(run_id,bucket)
+    repo.conn.execute(
+        "INSERT INTO newsletters(run_id, render_mode, record_count, bucket) "
+        "VALUES (%s,'en_only',0,'middle_east'),(%s,'en_only',0,'north_africa')", (rid, rid))
+    assert repo.conn.execute(
+        "SELECT count(*) FROM newsletters WHERE run_id=%s", (rid,)).fetchone()[0] == 2
+    # region_summaries table exists and round-trips
+    repo.conn.execute(
+        "INSERT INTO region_summaries(run_id, bucket, lede_en) VALUES (%s,'latam','hi')", (rid,))
+    assert repo.conn.execute(
+        "SELECT lede_en FROM region_summaries WHERE run_id=%s AND bucket='latam'",
+        (rid,)).fetchone()[0] == "hi"
+    # 'summary' is now an allowed stage_name (CHECK updated)
+    repo.start_stage(rid, "summary")  # raises if CHECK rejects 'summary'

@@ -42,3 +42,29 @@ def test_group_by_bucket_duplicates_overlap():
     assert ("a", "EG") in grouped["north_africa"]
     assert grouped["latam"] == [("b", "BR")]
     assert all(("c", "SU") not in v for v in grouped.values())  # Sudan dropped everywhere
+
+
+def test_country_to_fips_names_and_aliases():
+    assert regions.country_to_fips("Egypt") == "EG"
+    assert regions.country_to_fips("saudi arabia") == "SA"
+    assert regions.country_to_fips("UAE") == "AE"
+    assert regions.country_to_fips("United Arab Emirates") == "AE"
+    assert regions.country_to_fips("Türkiye") == "TU"
+    assert regions.country_to_fips("Brazil") == "BR"
+    assert regions.country_to_fips("other") is None
+    assert regions.country_to_fips("United States") is None
+    assert regions.country_to_fips(None) is None
+
+
+def test_top_per_bucket_ranks_caps_and_handles_egypt_dual():
+    # tuples: (id, country_fips, score)
+    items = [("eg", "EG", 0.9), ("sa", "SA", 0.8), ("ir", "IR", 0.7),
+             ("br", "BR", 0.5), ("ly", "LY", 0.4)]
+    out = regions.top_per_bucket(items, country_of=lambda t: t[1],
+                                 score_of=lambda t: t[2], n=2)
+    me = [t[0] for t in out["middle_east"]]
+    na = [t[0] for t in out["north_africa"]]
+    la = [t[0] for t in out["latam"]]
+    assert me == ["eg", "sa"]          # top 2 of EG/SA/IR by score
+    assert na == ["eg", "ly"]          # Egypt appears in NA too, independently capped
+    assert la == ["br"]

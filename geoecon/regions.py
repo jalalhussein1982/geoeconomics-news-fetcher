@@ -71,3 +71,34 @@ def group_by_bucket(items, country_of: Callable, active: Iterable[str] = BUCKET_
         for b in buckets_for_country(country_of(it), active_list):
             out[b].append(it)
     return out
+
+
+# Country NAME -> FIPS for the in-scope set, with common aliases. Used by the
+# geoeconomic gate, which returns a primary_country NAME chosen from this list.
+_NAME_TO_FIPS: dict[str, str] = {
+    "bahrain": "BA", "iran": "IR", "iraq": "IZ", "israel": "IS", "jordan": "JO",
+    "kuwait": "KU", "lebanon": "LE", "oman": "MU", "qatar": "QA",
+    "saudi arabia": "SA", "syria": "SY", "united arab emirates": "AE", "uae": "AE",
+    "yemen": "YM", "egypt": "EG", "turkey": "TU", "türkiye": "TU", "cyprus": "CY",
+    "west bank": "WE", "palestine": "WE", "gaza": "GZ", "gaza strip": "GZ",
+    "libya": "LY", "tunisia": "TS", "algeria": "AG", "morocco": "MO",
+    "brazil": "BR", "argentina": "AR", "mexico": "MX", "chile": "CI",
+    "colombia": "CO", "peru": "PE", "venezuela": "VE", "ecuador": "EC",
+    "bolivia": "BL", "paraguay": "PA", "uruguay": "UY", "guatemala": "GT",
+    "cuba": "CU", "dominican republic": "DR", "honduras": "HO", "nicaragua": "NU",
+    "costa rica": "CS", "panama": "PM", "el salvador": "ES",
+}
+
+
+def country_to_fips(name: str | None) -> str | None:
+    """Resolve an in-scope country NAME (or alias) to its FIPS code; None otherwise."""
+    if not name:
+        return None
+    return _NAME_TO_FIPS.get(name.strip().lower())
+
+
+def top_per_bucket(items, country_of: Callable, score_of: Callable, n: int,
+                   active: Iterable[str] = BUCKET_ORDER) -> dict[str, list]:
+    """group_by_bucket, then sort each bucket by score_of desc and keep the top n."""
+    grouped = group_by_bucket(items, country_of, active)
+    return {b: sorted(v, key=score_of, reverse=True)[:n] for b, v in grouped.items()}

@@ -6,21 +6,39 @@ log = logging.getLogger("geoecon.render")
 _env = Environment(loader=PackageLoader("geoecon.render", "templates"),
                    autoescape=select_autoescape(["html", "j2"]))
 
-def render_html(records, *, mode="en_only", date_str, throughline=None, stats=None):
-    ctx = {"records": records, "date_str": date_str, "throughline": throughline,
+def render_html(records, *, mode="en_only", date_str, summary=None,
+                region_display=None, throughline=None, stats=None):
+    ctx = {"records": records, "date_str": date_str, "summary": summary,
+           "region_display": region_display, "throughline": throughline,
            "stats": stats or {}, "mode": mode}
     archive = _env.get_template("archive.html.j2").render(**ctx)
     email = _env.get_template("email.html.j2").render(**ctx)
     return archive, email
 
+
 def run(cfg, repo, run_id, date_str, *, stats=None) -> dict:
-    records = repo.ok_records(run_id)
-    archive, email = render_html(records, mode="en_only", date_str=date_str, stats=stats)
+    from .. import regions
+    grouped = regions.group_by_bucket(
+        repo.records_for_buckets(run_id), country_of=lambda t: t[1], active=cfg.buckets)
     os.makedirs(cfg.archive_dir, exist_ok=True)
-    archive_path = os.path.join(cfg.archive_dir, f"geoecon-{date_str}.html")
-    with open(archive_path, "w", encoding="utf-8") as fh:
-        fh.write(archive)
-    nid = repo.insert_newsletter(run_id, "en_only", archive_path, email, len(records))
-    log.info("render: %d records -> %s", len(records), archive_path)
-    return {"newsletter_id": nid, "record_count": len(records),
-            "email_html": email, "archive_path": archive_path}
+    newsletters = []
+    for bucket in cfg.buckets:
+        items = grouped.get(bucket, [])
+        if not items:
+            continue
+        records = []
+        for rec, _country, sources in items:
+            rec.source_links = sources
+            records.append(rec)
+        summary = repo.get_region_summary(run_id, bucket)
+        region_display = regions.BUCKET_DISPLAY[bucket]
+        archive, email = render_html(records, mode="en_only", date_str=date_str,
+                                     summary=summary, region_display=region_display, stats=stats)
+        path = os.path.join(cfg.archive_dir, f"geoecon-{date_str}-{bucket}.html")
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(archive)
+        nid = repo.insert_newsletter(run_id, "en_only", path, email, len(records), bucket=bucket)
+        newsletters.append({"newsletter_id": nid, "bucket": bucket, "record_count": len(records)})
+        log.info("render[%s]: %d records -> %s", bucket, len(records), path)
+    return {"newsletters": newsletters,
+            "record_count": sum(n["record_count"] for n in newsletters)}

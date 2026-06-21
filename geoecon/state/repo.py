@@ -254,3 +254,22 @@ class Repo:
         for cl in self.clusters_for_run(run_id):
             if cl.cluster_id in ok_cluster_ids:
                 self.upsert_seen(cl.event_fingerprint, run_id)
+
+    # ---- region summaries ----
+    def upsert_region_summary(self, run_id, bucket, lede_en, takeaways, model, record_count):
+        self.conn.execute(
+            """INSERT INTO region_summaries(run_id, bucket, lede_en, takeaways, model, record_count)
+               VALUES (%s,%s,%s,%s,%s,%s)
+               ON CONFLICT (run_id, bucket) DO UPDATE SET
+                 lede_en=EXCLUDED.lede_en, takeaways=EXCLUDED.takeaways,
+                 model=EXCLUDED.model, record_count=EXCLUDED.record_count, created_at=now()""",
+            (run_id, bucket, lede_en, Jsonb(takeaways or []), model, record_count))
+
+    def get_region_summary(self, run_id, bucket) -> dict | None:
+        row = self.conn.execute(
+            "SELECT bucket, lede_en, takeaways, model, record_count "
+            "FROM region_summaries WHERE run_id=%s AND bucket=%s", (run_id, bucket)).fetchone()
+        if not row:
+            return None
+        return {"bucket": row[0], "lede_en": row[1], "takeaways": row[2],
+                "model": row[3], "record_count": row[4]}

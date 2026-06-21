@@ -190,3 +190,19 @@ def test_records_for_buckets_excludes_non_ok(repo):
     cid = repo.insert_cluster(rid, "fp1", "MENA", ["en"], 0, country_fips="EG")
     repo.upsert_synthesis_record(rid, cid, {"headline_en": "held"}, "zero_entities")
     assert repo.records_for_buckets(rid) == []
+
+
+@requires_db
+def test_region_summary_upsert_and_get(repo):
+    ws, we, sf = _win()
+    rid = repo.create_run(ws, we, sf, "deepseek-v3.2", "task_a_cov")
+    repo.upsert_region_summary(rid, "middle_east", "Lede one.", ["a", "b"], "deepseek-v3.2", 2)
+    got = repo.get_region_summary(rid, "middle_east")
+    assert got["lede_en"] == "Lede one."
+    assert got["takeaways"] == ["a", "b"]
+    assert got["record_count"] == 2
+    # upsert overwrites
+    repo.upsert_region_summary(rid, "middle_east", "Lede two.", ["c"], "deepseek-v3.2", 1)
+    got2 = repo.get_region_summary(rid, "middle_east")
+    assert got2["lede_en"] == "Lede two." and got2["takeaways"] == ["c"]
+    assert repo.get_region_summary(rid, "latam") is None

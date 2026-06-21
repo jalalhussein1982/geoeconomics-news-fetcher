@@ -210,3 +210,15 @@ Surface forms stored in **both** source-language original and English; synthesis
 10. Output language = store both, decide at render.
 11. Production guard mandatory; eval metrics are not the authority — human-judged out-of-sample output is.
 ```
+
+---
+
+## 12. Region split, summary stage, and per-region delivery (implemented)
+
+**Three region buckets** (FIPS country-code based, defined in `geoecon/regions.py`): `middle_east`, `north_africa`, `latin_america`. Egypt (`EG`) maps to both `middle_east` and `north_africa`; Israel, Turkey, and Cyprus are included in `middle_east`; West Bank/Gaza (`GZ`) is kept; Sudan is not in any bucket. Buckets are configurable via `cfg.active_buckets`.
+
+**Summary stage** (between synthesis and render): a `summary` stage (`geoecon/stages/summary.py`) groups synthesis records by bucket and calls the LLM once per non-empty bucket to produce a short editorial lede + takeaways; result is stored in `region_summaries`. The stage list is: `discovery → extraction → cluster → synthesis → summary → render → send`.
+
+**Per-region newsletters**: render produces one newsletter per non-empty bucket, stored with a `bucket` label in `newsletters`. Source links in the rendered HTML come from `articles.source_url` (the verified fetched URL), not from the LLM `sources` field. Empty buckets are silently skipped; a run with no content produces no newsletters and sends nothing.
+
+**Delivery**: `send` iterates `newsletters_for_run`; if there are no newsletters it returns `skipped_empty`. All newsletters go to the same `cfg.recipients` list (no per-region address splitting).

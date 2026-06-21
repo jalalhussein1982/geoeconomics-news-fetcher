@@ -28,3 +28,19 @@ def test_missing_required_raises():
     import pytest
     with pytest.raises(KeyError):
         Config.from_env({})
+
+
+_ENV = {
+    "DB_DSN": "x", "MAETCENTRUM_KEY": "k", "SMTP_HOST": "h",
+    "SMTP_USER": "u", "SMTP_PASSWORD": "p", "FROM_ADDR": "f", "RECIPIENTS": "r@x",
+}
+
+
+def test_buckets_default_is_three_regions():
+    cfg = Config.from_env(dict(_ENV))
+    assert cfg.buckets == ("middle_east", "north_africa", "latam")
+
+
+def test_buckets_overridable_from_env():
+    cfg = Config.from_env({**_ENV, "BUCKETS": "middle_east, latam"})
+    assert cfg.buckets == ("middle_east", "latam")

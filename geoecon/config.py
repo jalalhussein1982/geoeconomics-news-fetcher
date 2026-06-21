@@ -20,6 +20,7 @@ class Config:
     synthesis_prompt_id: str = "task_a_cov"
     embedding_model: str | None = None
     regions: tuple[str, ...] = ("MENA", "LatAm")
+    buckets: tuple[str, ...] = ("middle_east", "north_africa", "latam")
     window_hours: int = 24
     timezone: str = "Europe/Prague"
     archive_dir: str = "/data/archive"
@@ -47,6 +48,7 @@ class Config:
             synthesis_prompt_id=env.get("SYNTHESIS_PROMPT_ID", "task_a_cov"),
             embedding_model=env.get("EMBEDDING_MODEL") or None,
             regions=_split(env.get("REGIONS", "MENA,LatAm")),
+            buckets=_split(env.get("BUCKETS", "middle_east,north_africa,latam")),
             window_hours=int(env.get("WINDOW_HOURS", "24")),
             timezone=env.get("TIMEZONE", "Europe/Prague"),
             archive_dir=env.get("ARCHIVE_DIR", "/data/archive"),

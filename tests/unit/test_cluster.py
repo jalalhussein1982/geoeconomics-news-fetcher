@@ -51,6 +51,7 @@ def test_embedding_merges_same_event_across_countries():
     repo = FakeRepo(arts)
     out = cluster_stage.run(_CFG, repo, 1, FakeClient(vecs))
     assert out["clusters"] == 2
+    assert out["max_cluster_size"] == 2            # EG+TU merge -> largest cluster = 2
     merged = [c for c in repo.clusters if c["count"] == 2][0]
     assert merged["country_fips"] == "TU"          # primary = max gate_score (0.9)
     assert merged["centroid"] is not None and len(merged["centroid"]) == 2

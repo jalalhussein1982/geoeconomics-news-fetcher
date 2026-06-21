@@ -126,5 +126,11 @@ def run(cfg, repo, run_id: int, client) -> dict:
             repo.add_membership(cid, a.article_id)
         n += 1
 
+    max_cluster_size = max((len(m) for m in groups.values()), default=0)
+    if arts and max_cluster_size > 0.25 * len(arts):
+        log.warning("cluster: largest cluster has %d/%d gated articles (%.0f%%) — "
+                    "possible over-merge/chaining at threshold %.3f",
+                    max_cluster_size, len(arts),
+                    100 * max_cluster_size / len(arts), cfg.cluster_cosine_threshold)
     log.info("cluster: %d clusters from %d gated articles (%s)", n, len(arts), mode)
-    return {"clusters": n}
+    return {"clusters": n, "max_cluster_size": max_cluster_size}

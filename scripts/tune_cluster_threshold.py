@@ -32,7 +32,9 @@ def main(run_id: int):
     if vecs is None:
         print("embed failed"); return
     print(f"gated articles: {len(arts)}  (model {cfg.embedding_model})")
-    for thr in (0.80, 0.82, 0.84, 0.85, 0.86, 0.88, 0.90):
+    # e5 cosine baseline is high (~0.93 all-pairwise); low thresholds chain everything
+    # into one cluster. Clean event separation appears near ~0.98.
+    for thr in (0.90, 0.94, 0.96, 0.97, 0.975, 0.98, 0.985, 0.99):
         groups, _ = cluster._group_embedding(arts, vecs, thr)
         merged = sorted((g for g in groups.values() if len(g) > 1),
                         key=len, reverse=True)

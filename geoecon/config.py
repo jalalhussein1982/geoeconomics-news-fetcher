@@ -54,7 +54,7 @@ class Config:
             llm_base_url=env.get("LLM_BASE_URL", "https://llm.ai.e-infra.cz/v1"),
             synthesis_model=env.get("SYNTHESIS_MODEL", "deepseek-v3.2"),
             synthesis_prompt_id=env.get("SYNTHESIS_PROMPT_ID", "task_a_cov"),
-            embedding_model=env.get("EMBEDDING_MODEL", "multilingual-e5-large-instruct"),
+            embedding_model=env.get("EMBEDDING_MODEL") or "multilingual-e5-large-instruct",
             regions=_split(env.get("REGIONS", "MENA,LatAm")),
             buckets=_split(env.get("BUCKETS", ",".join(BUCKET_ORDER))),
             gate_model=env.get("GATE_MODEL", "deepseek-v3.2"),

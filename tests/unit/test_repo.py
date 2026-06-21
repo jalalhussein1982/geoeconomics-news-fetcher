@@ -150,3 +150,43 @@ def test_migration_adds_country_and_per_region_newsletters(repo):
         (rid,)).fetchone()[0] == "hi"
     # 'summary' is now an allowed stage_name (CHECK updated)
     repo.start_stage(rid, "summary")  # raises if CHECK rejects 'summary'
+
+
+@requires_db
+def test_records_for_buckets_aggregates_multiple_articles(repo):
+    ws, we, sf = _win()
+    rid = repo.create_run(ws, we, sf, "deepseek-v3.2", "task_a_cov")
+    a1 = repo.insert_article(rid, source_url="https://a.com/x", url_hash="h1",
+                             domain="a.com", region="MENA", title="t", country_fips="EG")
+    a2 = repo.insert_article(rid, source_url="https://b.com/y", url_hash="h2",
+                             domain="b.com", region="MENA", title="t", country_fips="EG")
+    cid = repo.insert_cluster(rid, "fp1", "MENA", ["en"], 2, country_fips="EG")
+    repo.add_membership(cid, a1)
+    repo.add_membership(cid, a2)
+    repo.upsert_synthesis_record(rid, cid, {"headline_en": "A"}, "ok")
+    out = repo.records_for_buckets(rid)
+    assert len(out) == 1                       # one tuple per record
+    _rec, country, sources = out[0]
+    assert country == "EG"
+    assert {s["url"] for s in sources} == {"https://a.com/x", "https://b.com/y"}
+
+
+@requires_db
+def test_records_for_buckets_no_member_article_has_empty_sources(repo):
+    ws, we, sf = _win()
+    rid = repo.create_run(ws, we, sf, "deepseek-v3.2", "task_a_cov")
+    cid = repo.insert_cluster(rid, "fp1", "MENA", ["en"], 0, country_fips="EG")
+    repo.upsert_synthesis_record(rid, cid, {"headline_en": "A"}, "ok")
+    out = repo.records_for_buckets(rid)
+    assert len(out) == 1
+    _rec, country, sources = out[0]
+    assert country == "EG" and sources == []
+
+
+@requires_db
+def test_records_for_buckets_excludes_non_ok(repo):
+    ws, we, sf = _win()
+    rid = repo.create_run(ws, we, sf, "deepseek-v3.2", "task_a_cov")
+    cid = repo.insert_cluster(rid, "fp1", "MENA", ["en"], 0, country_fips="EG")
+    repo.upsert_synthesis_record(rid, cid, {"headline_en": "held"}, "zero_entities")
+    assert repo.records_for_buckets(rid) == []

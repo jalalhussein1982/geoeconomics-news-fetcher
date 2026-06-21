@@ -169,7 +169,7 @@ class Repo:
                 quality_flag="ok", is_headline_only=r[12]))
         return out
 
-    def records_for_buckets(self, run_id) -> list:
+    def records_for_buckets(self, run_id) -> list[tuple[SynthesisRecord, str | None, list[dict]]]:
         """OK records with their cluster country_fips and verified source link(s).
 
         Returns [(SynthesisRecord, country_fips, [{"url","domain"}, ...]), ...],

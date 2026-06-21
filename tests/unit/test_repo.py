@@ -104,6 +104,23 @@ def test_mark_emitted_marks_only_ok_clusters(repo):
     assert repo.get_seen("fpB") is None
 
 @requires_db
+def test_records_for_buckets_carries_country_and_source(repo):
+    ws, we, sf = _win()
+    rid = repo.create_run(ws, we, sf, "deepseek-v3.2", "task_a_cov")
+    aid = repo.insert_article(rid, source_url="https://reuters.com/x", url_hash="h",
+                              domain="reuters.com", region="MENA", gkg_themes=[],
+                              title="t", country_fips="EG")
+    cid = repo.insert_cluster(rid, "fp1", "MENA", ["en"], 1, country_fips="EG")
+    repo.add_membership(cid, aid)
+    repo.upsert_synthesis_record(rid, cid, {"headline_en": "A"}, "ok")
+    out = repo.records_for_buckets(rid)
+    assert len(out) == 1
+    rec, country, sources = out[0]
+    assert rec.fields["headline_en"] == "A"
+    assert country == "EG"
+    assert sources == [{"url": "https://reuters.com/x", "domain": "reuters.com"}]
+
+@requires_db
 def test_migration_adds_country_and_per_region_newsletters(repo):
     ws, we, sf = _win()
     rid = repo.create_run(ws, we, sf, "deepseek-v3.2", "task_a_cov")

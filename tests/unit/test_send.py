@@ -31,3 +31,13 @@ def test_run_marks_failed_on_error():
     def transport(cfg, msg): raise RuntimeError("smtp down")
     out = send.run(Cfg(), FakeRepo(), 1, "S", "<b>h</b>", transport=transport)
     assert out["send_status"] == "failed" and "smtp down" in sent["err"]
+
+def test_send_run_still_sends_one_newsletter():
+    # send.run contract is unchanged: one newsletter at a time
+    sent = {}
+    class FakeRepo:
+        def update_newsletter_send(self, nid, status, send_error=None):
+            sent["status"] = status
+    out = send.run(Cfg(), FakeRepo(), 1, "Geoeconomic Brief — Middle East — 2026-06-21",
+                   "<b>h</b>", transport=lambda cfg, msg: None)
+    assert out["send_status"] == "sent" and sent["status"] == "sent"

@@ -12,10 +12,11 @@
 
 ```
 07:00 cron (daily)
-  → 1a  DISCOVERY    GDELT 2.0, window [T-24h, T], GKG theme-intersection ≥2,
-                     NumMentions tiebreak, extraction ceiling 150/day
+  → 1a  DISCOVERY    GDELT 2.0, window [T-24h, T], prefilter ≥1 economic theme,
+                     NumMentions tiebreak, per-bucket ceiling (cfg.discovery_ceiling, default 120)
   → 1b  EXTRACTION   trafilatura → GDELT-metadata fallback (headline-only) on fail
   → 1c  RSS DEPTH    curated regional feeds (deferred config; empty for now)
+  → 1d  GATE         batched LLM geoeconomic+region gate; keep iff geoeconomic AND in-scope bucket
   → 2   CLUSTER      multilingual event clustering (BGE-M3 provisional) + framing-divergence flag
   → 3   SYNTHESIS    per-cluster JSON record (deepseek-v3.2 + coverage prompt)
                      + throughline pass (stronger model, null-permitted)
@@ -48,9 +49,9 @@
 ### 1a — Discovery (GDELT 2.0)
 - Source: GDELT 2.0 — multilingual, geo-tagged, theme-tagged; 15-min update files sliced to the window.
 - Filter: **GKG themes only** (keyword/actor layer deferred as fallback if recall is thin).
-- Filter logic: **theme intersection** — require **≥2** geoeconomic/region themes co-tagged (`ECON_*`, `WB_*`, region themes). Raises precision without a lexicon.
+- Filter logic: **prefilter** — require **≥1** economic theme (`ECON_*`, `WB_*`). Precision is handled downstream by the gate stage, not the prefilter.
 - Tiebreaker: **NumMentions / NumSources** (salience proxy) when volume exceeds the ceiling.
-- Extraction ceiling: **150 articles/day pre-dedup** (tunable).
+- Per-bucket discovery ceiling: `cfg.discovery_ceiling` (default 120), salience-sorted, per bucket; the old global 150/day cap is removed.
 - Known caveat: GDELT geo/theme tagging is noisy (false positives). Accepted for breadth; relevance is further handled downstream.
 
 ### 1b — Extraction
@@ -200,7 +201,7 @@ Surface forms stored in **both** source-language original and English; synthesis
 
 1. Scheduled daily batch, 07:00, fixed [T-24h, T], non-overlap enforced.
 2. GDELT discovery spine + separate extraction + deferred curated RSS.
-3. GKG themes only; theme-intersection ≥2; NumMentions tiebreak; ceiling 150/day.
+3. GKG themes only; prefilter ≥1 economic theme; NumMentions tiebreak; per-bucket ceiling (cfg.discovery_ceiling, default 120).
 4. trafilatura → GDELT-metadata headline-only fallback.
 5. Multilingual event clustering + framing-divergence retention.
 6. Per-cluster structured JSON record + null-permitted throughline; grounding + JSON non-negotiables; no separate translation.

@@ -28,7 +28,7 @@ class Config:
     region_cap: int = 12
     discovery_ceiling: int = 120
     dedup_jaccard: float = 0.6
-    cluster_cosine_threshold: float = 0.85
+    cluster_cosine_threshold: float = 0.98
     window_hours: int = 24
     timezone: str = "Europe/Prague"
     archive_dir: str = "/data/archive"
@@ -62,7 +62,7 @@ class Config:
             region_cap=int(env.get("REGION_CAP", "12")),
             discovery_ceiling=int(env.get("DISCOVERY_CEILING", "120")),
             dedup_jaccard=float(env.get("DEDUP_JACCARD", "0.6")),
-            cluster_cosine_threshold=float(env.get("CLUSTER_COSINE_THRESHOLD", "0.85")),
+            cluster_cosine_threshold=float(env.get("CLUSTER_COSINE_THRESHOLD", "0.98")),
             window_hours=int(env.get("WINDOW_HOURS", "24")),
             timezone=env.get("TIMEZONE", "Europe/Prague"),
             archive_dir=env.get("ARCHIVE_DIR", "/data/archive"),

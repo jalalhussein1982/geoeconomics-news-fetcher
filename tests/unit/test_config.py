@@ -70,7 +70,7 @@ def test_embedding_and_cosine_defaults_and_overrides():
             "SMTP_PASSWORD": "p", "FROM_ADDR": "f", "RECIPIENTS": "r@x"}
     cfg = Config.from_env(base)
     assert cfg.embedding_model == "multilingual-e5-large-instruct"
-    assert cfg.cluster_cosine_threshold == 0.85
+    assert cfg.cluster_cosine_threshold == 0.98
     over = Config.from_env({**base, "EMBEDDING_MODEL": "qwen3-embedding-4b",
                             "CLUSTER_COSINE_THRESHOLD": "0.9"})
     assert over.embedding_model == "qwen3-embedding-4b"

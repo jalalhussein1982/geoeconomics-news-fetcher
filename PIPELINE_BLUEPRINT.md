@@ -70,8 +70,8 @@
 - **Approach:** event-level, language-agnostic clustering with framing-divergence retention.
 - Embed all articles in a shared multilingual vector space; cluster by semantic similarity so the **same event across languages collapses into one cluster** carrying its multilingual sources.
 - **Framing-divergence retention:** preserve divergent framing *within* a cluster as a synthesis signal (e.g. Gulf press vs. Brazilian press on one BRICS/de-dollarization story). This is the pipeline's core analytical differentiator — not a dedup nuisance.
-- Tunables/guards: similarity threshold + min/max cluster-size guards.
-- **Embedding model:** provisionally **BGE-M3** (already in use) — **pending the embedding/reranker eval**, which may replace it with a MetaCentrum-local model if it separates better cross-language.
+- **Embedding model:** `multilingual-e5-large-instruct` (via `LLMClient.embed()`). Each article is encoded as its title + first 500 chars of body (e5 instruction prefix applied); cosine similarity ≥ `cfg.cluster_cosine_threshold` (default 0.98) merges any two articles into the same cluster regardless of country — enabling cross-country same-event collapse. Centroid stored on `clusters` for downstream use.
+- **Fallback:** if the embedding endpoint is unavailable, clustering degrades to lexical title-Jaccard ≥ `cfg.dedup_jaccard` within the same country (same behavior as the pre-embedding merge). No articles are dropped.
 
 ---
 
@@ -237,3 +237,5 @@ Surface forms stored in **both** source-language original and English; synthesis
 **Per-region cap + clean key-figures (render/summary)**: both the summary and render stages select the top `cfg.region_cap` (default 12) records per bucket ranked by gate score (`regions.top_per_bucket`). Key figures are rendered via a spaced, de-duplicated `figures_text` field (value + unit, space-joined and `·`-separated; the unit is not re-appended when the value already ends with it; no `gloss_en` prose) computed as a transient attribute on the synthesis record.
 
 **New config knobs** (all have env-var overrides): `gate_model` (`GATE_MODEL`, default `deepseek-v3.2`), `gate_batch_size` (`GATE_BATCH_SIZE`, default 15), `region_cap` (`REGION_CAP`, default 12), `discovery_ceiling` (`DISCOVERY_CEILING`, default 120), `dedup_jaccard` (`DEDUP_JACCARD`, default 0.6).
+
+**Embedding-based semantic clustering** (upgrade from lexical dedup): the cluster stage now uses `multilingual-e5-large-instruct` cosine similarity over title + body-lead to merge same-event articles cross-country; the lexical title-Jaccard merge is retained only as the endpoint-down fallback. `cluster_cosine_threshold` (`CLUSTER_COSINE_THRESHOLD`, default 0.98) governs merge strictness.

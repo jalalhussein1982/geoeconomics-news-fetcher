@@ -67,11 +67,10 @@
 
 ## 4. Stage 2 — Clustering
 
-- **Approach:** event-level, language-agnostic clustering with framing-divergence retention.
-- Embed all articles in a shared multilingual vector space; cluster by semantic similarity so the **same event across languages collapses into one cluster** carrying its multilingual sources.
-- **Framing-divergence retention:** preserve divergent framing *within* a cluster as a synthesis signal (e.g. Gulf press vs. Brazilian press on one BRICS/de-dollarization story). This is the pipeline's core analytical differentiator — not a dedup nuisance.
-- **Embedding model:** `multilingual-e5-large-instruct` (via `LLMClient.embed()`). Each article is encoded as its title + first 500 chars of body (e5 instruction prefix applied); cosine similarity ≥ `cfg.cluster_cosine_threshold` (default 0.98) merges any two articles into the same cluster regardless of country — enabling cross-country same-event collapse. Centroid stored on `clusters` for downstream use.
-- **Fallback:** if the embedding endpoint is unavailable, clustering degrades to lexical title-Jaccard ≥ `cfg.dedup_jaccard` within the same country (same behavior as the pre-embedding merge). No articles are dropped.
+- **Approach:** per-country LLM event grouping. Gated articles are first bucketed by the gate-assigned `country_fips`. For each country with more than one article the LLM (`cfg.dedup_model`, `deepseek-v3.2`) is asked to partition that country's articles into distinct events (prompt: `geoecon/prompts/event_grouping.txt`); singleton countries bypass the LLM. The LLM call is retried once on failure.
+- **Fallback:** if the LLM fails or returns an invalid partition for a country, that country falls back to lexical title-Jaccard union-find (`_lexical_groups`, threshold `cfg.dedup_jaccard`, default 0.6). No articles are dropped.
+- **Embedding approach removed:** an earlier design used `multilingual-e5-large-instruct` cosine similarity for cross-country same-event collapse; it was tried and removed because it over-merged distinct events. `LLMClient.embed()` and `cfg.cluster_cosine_threshold` no longer exist.
+- **Cluster record:** the primary article (highest `gate_score`) sets the cluster's `country_fips` and `gate_score`; no centroid is stored.
 
 ---
 
@@ -238,4 +237,4 @@ Surface forms stored in **both** source-language original and English; synthesis
 
 **New config knobs** (all have env-var overrides): `gate_model` (`GATE_MODEL`, default `deepseek-v3.2`), `gate_batch_size` (`GATE_BATCH_SIZE`, default 15), `region_cap` (`REGION_CAP`, default 12), `discovery_ceiling` (`DISCOVERY_CEILING`, default 120), `dedup_jaccard` (`DEDUP_JACCARD`, default 0.6).
 
-**Embedding-based semantic clustering** (upgrade from lexical dedup): the cluster stage now uses `multilingual-e5-large-instruct` cosine similarity over title + body-lead to merge same-event articles cross-country; the lexical title-Jaccard merge is retained only as the endpoint-down fallback. `cluster_cosine_threshold` (`CLUSTER_COSINE_THRESHOLD`, default 0.98) governs merge strictness.
+**Per-country LLM event grouping** (replaces embedding clustering): the cluster stage now buckets gated articles by gate-assigned country and calls the LLM (`dedup_model`, `deepseek-v3.2`) to partition each country's articles into distinct events; the lexical title-Jaccard merge is retained only as the per-country fallback on LLM failure. The embedding approach (`multilingual-e5-large-instruct` cosine similarity) was tried and removed — it over-merged distinct events. `LLMClient.embed()` and `cluster_cosine_threshold` no longer exist.

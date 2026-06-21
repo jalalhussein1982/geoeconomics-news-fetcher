@@ -20,7 +20,7 @@ class Config:
     llm_base_url: str = "https://llm.ai.e-infra.cz/v1"
     synthesis_model: str = "deepseek-v3.2"
     synthesis_prompt_id: str = "task_a_cov"
-    embedding_model: str | None = None
+    embedding_model: str = "multilingual-e5-large-instruct"
     regions: tuple[str, ...] = ("MENA", "LatAm")
     buckets: tuple[str, ...] = BUCKET_ORDER
     gate_model: str = "deepseek-v3.2"
@@ -28,6 +28,7 @@ class Config:
     region_cap: int = 12
     discovery_ceiling: int = 120
     dedup_jaccard: float = 0.6
+    cluster_cosine_threshold: float = 0.85
     window_hours: int = 24
     timezone: str = "Europe/Prague"
     archive_dir: str = "/data/archive"
@@ -53,7 +54,7 @@ class Config:
             llm_base_url=env.get("LLM_BASE_URL", "https://llm.ai.e-infra.cz/v1"),
             synthesis_model=env.get("SYNTHESIS_MODEL", "deepseek-v3.2"),
             synthesis_prompt_id=env.get("SYNTHESIS_PROMPT_ID", "task_a_cov"),
-            embedding_model=env.get("EMBEDDING_MODEL") or None,
+            embedding_model=env.get("EMBEDDING_MODEL", "multilingual-e5-large-instruct"),
             regions=_split(env.get("REGIONS", "MENA,LatAm")),
             buckets=_split(env.get("BUCKETS", ",".join(BUCKET_ORDER))),
             gate_model=env.get("GATE_MODEL", "deepseek-v3.2"),
@@ -61,6 +62,7 @@ class Config:
             region_cap=int(env.get("REGION_CAP", "12")),
             discovery_ceiling=int(env.get("DISCOVERY_CEILING", "120")),
             dedup_jaccard=float(env.get("DEDUP_JACCARD", "0.6")),
+            cluster_cosine_threshold=float(env.get("CLUSTER_COSINE_THRESHOLD", "0.85")),
             window_hours=int(env.get("WINDOW_HOURS", "24")),
             timezone=env.get("TIMEZONE", "Europe/Prague"),
             archive_dir=env.get("ARCHIVE_DIR", "/data/archive"),

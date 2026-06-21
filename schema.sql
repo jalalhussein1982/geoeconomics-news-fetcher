@@ -55,7 +55,7 @@ CREATE TABLE stage_runs (
     run_id          BIGINT NOT NULL REFERENCES runs(run_id) ON DELETE CASCADE,
     stage_name      TEXT NOT NULL
                     CHECK (stage_name IN
-                        ('discovery','extraction','rss','cluster','synthesis','summary','render','send')),
+                        ('discovery','extraction','rss','gate','cluster','synthesis','summary','render','send')),
     status          TEXT NOT NULL DEFAULT 'pending'
                     CHECK (status IN ('pending','running','completed','failed','skipped')),
     started_at      TIMESTAMPTZ,
@@ -85,6 +85,10 @@ CREATE TABLE articles (
     -- geo + theme tags carried from GDELT GKG (the discovery filter surface)
     region          TEXT CHECK (region IN ('MENA','LatAm','other')),
     country_fips    TEXT,
+    gate_geoeconomic BOOLEAN,
+    gate_score      REAL,
+    gate_country    TEXT,
+    gate_reason     TEXT,
     gkg_themes      TEXT[],                            -- the ECON_*/WB_* codes that matched
     gkg_tone        REAL,
     num_mentions    INTEGER,                           -- salience tiebreaker
@@ -118,6 +122,7 @@ CREATE TABLE clusters (
     event_fingerprint   TEXT NOT NULL,
     region              TEXT CHECK (region IN ('MENA','LatAm','other')),
     country_fips        TEXT,
+    gate_score          REAL,
     article_count       INTEGER NOT NULL DEFAULT 0,
     languages           TEXT[],                        -- distinct source langs in the cluster
     -- framing-divergence flag set by Stage 2 when intra-cluster framing diverges

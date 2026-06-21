@@ -256,3 +256,24 @@ def test_synthesis_remains_allowed_stage_name(repo):
     repo.start_stage(rid, "synthesis")   # must not raise (CHECK must include 'synthesis')
     repo.complete_stage(rid, "synthesis")
     assert "synthesis" in repo.completed_stages(rid)
+
+
+@requires_db
+def test_migration_003_gate_columns_and_stage(repo):
+    ws, we, sf = _win()
+    rid = repo.create_run(ws, we, sf, "deepseek-v3.2", "task_a_cov")
+    repo.conn.execute(
+        "INSERT INTO articles(run_id, source_url, url_hash, region, country_fips, "
+        "gate_geoeconomic, gate_score, gate_country, gate_reason) "
+        "VALUES (%s,'u','h','MENA','EG', true, 0.8, 'Egypt', 'why')", (rid,))
+    row = repo.conn.execute(
+        "SELECT gate_geoeconomic, gate_score, gate_country FROM articles WHERE run_id=%s",
+        (rid,)).fetchone()
+    assert row[0] is True and abs(row[1] - 0.8) < 1e-6 and row[2] == "Egypt"
+    repo.conn.execute(
+        "INSERT INTO clusters(run_id, event_fingerprint, region, article_count, gate_score) "
+        "VALUES (%s,'fp','MENA',1,0.9)", (rid,))
+    assert repo.conn.execute(
+        "SELECT gate_score FROM clusters WHERE run_id=%s", (rid,)).fetchone()[0] is not None
+    repo.start_stage(rid, "gate")  # must not raise (CHECK includes 'gate')
+    assert "gate" not in repo.completed_stages(rid)

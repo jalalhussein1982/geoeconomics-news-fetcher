@@ -17,6 +17,10 @@ class Article:
     body: str | None
     fetch_status: str
     country_fips: str | None = None
+    gate_geoeconomic: bool | None = None
+    gate_score: float | None = None
+    gate_country: str | None = None
+    gate_reason: str | None = None
 
 @dataclass
 class Cluster:
@@ -27,6 +31,7 @@ class Cluster:
     article_count: int
     framing_divergent: bool
     country_fips: str | None = None
+    gate_score: float | None = None
 
 @dataclass
 class SynthesisRecord:

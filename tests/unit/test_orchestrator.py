@@ -48,5 +48,6 @@ def test_default_stages_include_summary_in_order():
     from geoecon import orchestrator
     cfg = _cfg()
     names = [name for name, _fn in orchestrator._default_stages(cfg, client=None)]
-    assert names == ["discovery", "extraction", "cluster", "synthesis", "summary", "render", "send"]
+    assert names == ["discovery", "extraction", "gate", "cluster", "synthesis", "summary", "render", "send"]
+    assert names.index("extraction") < names.index("gate") < names.index("cluster")
     assert names.index("summary") < names.index("render") < names.index("send")

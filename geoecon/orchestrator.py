@@ -6,12 +6,13 @@ from .config import Config
 log = logging.getLogger("geoecon.orchestrator")
 
 def _default_stages(cfg, client):
-    from .stages import discovery, extract, cluster, synth, summary, render, send
+    from .stages import discovery, extract, gate, cluster, synth, summary, render, send
     from . import regions
     date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     state = {}
     def _discovery(c, r, rid): state["m"] = discovery.run(c, r, rid); return state["m"]
     def _extract(c, r, rid):   return extract.run(c, r, rid)
+    def _gate(c, r, rid):      return gate.run(c, r, rid, client)
     def _cluster(c, r, rid):   return cluster.run(c, r, rid)
     def _synth(c, r, rid):     return synth.run(c, r, rid, client)
     def _summary(c, r, rid):   return summary.run(c, r, rid, client)
@@ -32,7 +33,7 @@ def _default_stages(cfg, client):
             r.mark_emitted(rid)
             return {"send_status": "sent", "sent": out["results"]}
         raise RuntimeError(f"send: some regions failed to send: {out['results']}")
-    return [("discovery", _discovery), ("extraction", _extract), ("cluster", _cluster),
+    return [("discovery", _discovery), ("extraction", _extract), ("gate", _gate), ("cluster", _cluster),
             ("synthesis", _synth), ("summary", _summary), ("render", _render), ("send", _send)]
 
 def run_pipeline(cfg: Config, repo, *, now=None, stages=None, client=None) -> dict:

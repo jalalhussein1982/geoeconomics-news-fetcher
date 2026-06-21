@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 
 import requests
 
-from .. import gdelt
+from .. import gdelt, regions
 from ..config import Config
 
 log = logging.getLogger("geoecon.discovery")
@@ -71,7 +71,7 @@ def run(
         if not gdelt.theme_intersection_ok(rec.themes):
             continue
         region = gdelt.region_for_country(rec.country)
-        if region not in cfg.regions:
+        if not regions.buckets_for_country(rec.country, cfg.buckets):
             continue
         h = gdelt.url_hash(rec.url)
         if h in seen_hashes:
@@ -92,6 +92,7 @@ def run(
             url_hash=h,
             domain=rec.domain,
             region=region,
+            country_fips=rec.country,
             gkg_themes=rec.themes,
             gkg_tone=rec.tone,
             source_lang=rec.lang,

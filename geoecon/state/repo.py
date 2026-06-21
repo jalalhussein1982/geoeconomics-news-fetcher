@@ -180,18 +180,19 @@ class Repo:
                 quality_flag="ok", is_headline_only=r[12]))
         return out
 
-    def records_for_buckets(self, run_id) -> list[tuple[SynthesisRecord, str | None, list[dict]]]:
-        """OK records with their cluster country_fips and verified source link(s).
+    def records_for_buckets(self, run_id) -> list[tuple[SynthesisRecord, str | None, list[dict], float | None]]:
+        """OK records with their cluster country_fips, verified source link(s), and gate score.
 
-        Returns [(SynthesisRecord, country_fips, [{"url","domain"}, ...]), ...],
+        Returns [(SynthesisRecord, country_fips, [{"url","domain"}, ...], gate_score), ...],
         one tuple per record. Source links come from articles.source_url (verified
-        GDELT URLs), NOT the LLM 'sources' field.
+        GDELT URLs), NOT the LLM 'sources' field. gate_score is the cluster-level
+        geoeconomic relevance score (float or None).
         """
         rows = self.conn.execute(
             """SELECT s.record_id, s.cluster_id, s.headline_en, s.headline_original,
                  s.headline_original_lang, s.what_happened_en, s.geoeconomic_significance_en,
                  s.geoeconomic_vector, s.entities, s.key_figures, s.framing_divergence,
-                 s.sources, s.is_headline_only, c.country_fips, a.source_url, a.domain
+                 s.sources, s.is_headline_only, c.country_fips, c.gate_score, a.source_url, a.domain
                FROM synthesis_records s
                JOIN clusters c ON c.cluster_id = s.cluster_id
                LEFT JOIN cluster_articles ca ON ca.cluster_id = c.cluster_id
@@ -211,10 +212,10 @@ class Repo:
                             "entities": r[8], "key_figures": r[9], "framing_divergence": r[10],
                             "sources": r[11]},
                     quality_flag="ok", is_headline_only=r[12])
-                by_id[rec_id] = [rec, r[13], []]
+                by_id[rec_id] = [rec, r[13], [], r[14]]
                 order.append(rec_id)
-            if r[14]:  # source_url present
-                src = {"url": r[14], "domain": r[15]}
+            if r[15]:  # source_url present
+                src = {"url": r[15], "domain": r[16]}
                 if src not in by_id[rec_id][2]:
                     by_id[rec_id][2].append(src)
         return [tuple(by_id[i]) for i in order]

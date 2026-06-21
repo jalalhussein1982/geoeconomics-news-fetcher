@@ -115,7 +115,7 @@ def test_records_for_buckets_carries_country_and_source(repo):
     repo.upsert_synthesis_record(rid, cid, {"headline_en": "A"}, "ok")
     out = repo.records_for_buckets(rid)
     assert len(out) == 1
-    rec, country, sources = out[0]
+    rec, country, sources, _score = out[0]
     assert rec.fields["headline_en"] == "A"
     assert country == "EG"
     assert sources == [{"url": "https://reuters.com/x", "domain": "reuters.com"}]
@@ -166,7 +166,7 @@ def test_records_for_buckets_aggregates_multiple_articles(repo):
     repo.upsert_synthesis_record(rid, cid, {"headline_en": "A"}, "ok")
     out = repo.records_for_buckets(rid)
     assert len(out) == 1                       # one tuple per record
-    _rec, country, sources = out[0]
+    _rec, country, sources, _score = out[0]
     assert country == "EG"
     assert {s["url"] for s in sources} == {"https://a.com/x", "https://b.com/y"}
 
@@ -179,7 +179,7 @@ def test_records_for_buckets_no_member_article_has_empty_sources(repo):
     repo.upsert_synthesis_record(rid, cid, {"headline_en": "A"}, "ok")
     out = repo.records_for_buckets(rid)
     assert len(out) == 1
-    _rec, country, sources = out[0]
+    _rec, country, sources, _score = out[0]
     assert country == "EG" and sources == []
 
 

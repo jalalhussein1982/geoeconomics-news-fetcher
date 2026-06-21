@@ -15,7 +15,7 @@
   <h2>{{ r.fields.headline_en }}</h2>
   <p>{{ r.fields.what_happened_en }}</p>
   {% if r.fields.geoeconomic_significance_en %}<p class="sig"><b>Significance:</b> {{ r.fields.geoeconomic_significance_en }}</p>{% endif %}
-  {% if r.fields.key_figures %}<p class="figs">{% for k in r.fields.key_figures %}{{ k.value }}{{ k.unit or '' }} — {{ k.gloss_en or '' }}{% if not loop.last %}; {% endif %}{% endfor %}</p>{% endif %}
+  {% if r.figures_text %}<p class="figs">{{ r.figures_text }}</p>{% endif %}
   {% if r.source_links %}<p class="figs">{% for s in r.source_links %}Source: <a href="{{ s.url }}">{{ s.domain or s.url }}</a>{% if not loop.last %}; {% endif %}{% endfor %}</p>{% endif %}
 </div>{% else %}<p>A quiet day — no qualifying items.</p>{% endfor %}
 </body></html>

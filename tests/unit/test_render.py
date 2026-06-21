@@ -43,3 +43,17 @@ def test_summary_block_and_source_link_render():
     assert "reuters.com" in email
     # the LLM 'sources' attribution URL must NOT be used as a link
     assert "attribution-only" not in email
+
+
+def test_format_figures_spacing_and_dedup():
+    from geoecon.stages import render
+    figs = [{"value": "$318 billion", "unit": "USD"},
+            {"value": "$318 billion", "unit": "USD"},   # duplicate
+            {"value": "1.10%", "unit": "%"},            # unit already a suffix
+            {"value": "52,621.84", "unit": "points"}]
+    out = render.format_figures(figs)
+    assert "$318 billion USD" in out
+    assert out.count("$318 billion USD") == 1          # de-duped
+    assert "1.10%" in out and "%%" not in out
+    assert "52,621.84 points" in out
+    assert " · " in out                                # records joined with ` · ` separator

@@ -38,8 +38,9 @@ def run(cfg, repo, run_id, client, *, prompt: str | None = None) -> dict:
         from importlib.resources import files
         prompt = files("geoecon.prompts").joinpath("region_summary.txt").read_text("utf-8")
 
-    grouped = regions.group_by_bucket(
-        repo.records_for_buckets(run_id), country_of=lambda t: t[1], active=cfg.buckets)
+    grouped = regions.top_per_bucket(
+        repo.records_for_buckets(run_id), country_of=lambda t: t[1],
+        score_of=lambda t: t[3] or 0.0, n=cfg.region_cap, active=cfg.buckets)
 
     counts = {"summaries_total": 0, "summaries_ok": 0, "summaries_empty": 0}
     for bucket in cfg.buckets:

@@ -215,7 +215,7 @@ Surface forms stored in **both** source-language original and English; synthesis
 
 ## 12. Region split, summary stage, and per-region delivery (implemented)
 
-**Three region buckets** (FIPS country-code based, defined in `geoecon/regions.py`): `middle_east`, `north_africa`, `latin_america`. Egypt (`EG`) maps to both `middle_east` and `north_africa`; Israel, Turkey, and Cyprus are included in `middle_east`; West Bank/Gaza (`GZ`) is kept; Sudan is not in any bucket. Buckets are configurable via `cfg.active_buckets`.
+**Three region buckets** (FIPS country-code based, defined in `geoecon/regions.py`): `middle_east`, `north_africa`, `latam`. Egypt (`EG`) maps to both `middle_east` and `north_africa`; Israel, Turkey, and Cyprus are included in `middle_east`; West Bank (`WE`) and Gaza (`GZ`) are kept; Sudan is not in any bucket. Active buckets are configurable via `cfg.buckets` (env `BUCKETS`).
 
 **Summary stage** (between synthesis and render): a `summary` stage (`geoecon/stages/summary.py`) groups synthesis records by bucket and calls the LLM once per non-empty bucket to produce a short editorial lede + takeaways; result is stored in `region_summaries`. The stage list is: `discovery → extraction → cluster → synthesis → summary → render → send`.
 

@@ -52,9 +52,12 @@ def test_gate_keeps_resolves_region_and_drops_other():
 def test_gate_fail_open_on_unparseable():
     arts = [_art(1, "SA", "x")]
     repo = _Repo(arts)
-    counts = gate.run(_CFG, repo, 1, _client("not json"), prompt="SYS")
+    client = _client("not json")
+    counts = gate.run(_CFG, repo, 1, client, prompt="SYS")
     assert counts["gate_unparsed"] == 1 and counts["gate_kept"] == 1
     assert repo.gates[1]["geoeconomic"] is True and repo.gates[1]["reason"] == "gate_unparsed"
+    assert repo.gates[1]["score"] == 0.0
+    assert len(client.calls) == 2  # primary call + one retry before failing open
 
 
 def test_build_messages_numbers_items():

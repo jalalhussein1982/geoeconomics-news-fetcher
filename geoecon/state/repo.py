@@ -105,13 +105,15 @@ class Repo:
 
     # ---- clusters ----
     def insert_cluster(self, run_id, event_fingerprint, region, languages, article_count,
-                       framing_divergent=False, country_fips=None, gate_score=None) -> int:
+                       framing_divergent=False, country_fips=None, gate_score=None,
+                       centroid=None) -> int:
         return self.conn.execute(
             """INSERT INTO clusters(run_id, event_fingerprint, region, country_fips,
-                 languages, article_count, framing_divergent, gate_score)
-               VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING cluster_id""",
+                 languages, article_count, framing_divergent, gate_score, centroid)
+               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING cluster_id""",
             (run_id, event_fingerprint, region, country_fips, languages, article_count,
-             framing_divergent, gate_score)).fetchone()[0]
+             framing_divergent, gate_score,
+             Jsonb(centroid) if centroid is not None else None)).fetchone()[0]
 
     def add_membership(self, cluster_id, article_id, frame_label=None):
         self.conn.execute(

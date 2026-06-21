@@ -13,7 +13,7 @@ def _default_stages(cfg, client):
     def _discovery(c, r, rid): state["m"] = discovery.run(c, r, rid); return state["m"]
     def _extract(c, r, rid):   return extract.run(c, r, rid)
     def _gate(c, r, rid):      return gate.run(c, r, rid, client)
-    def _cluster(c, r, rid):   return cluster.run(c, r, rid)
+    def _cluster(c, r, rid):   return cluster.run(c, r, rid, client)
     def _synth(c, r, rid):     return synth.run(c, r, rid, client)
     def _summary(c, r, rid):   return summary.run(c, r, rid, client)
     def _render(c, r, rid):

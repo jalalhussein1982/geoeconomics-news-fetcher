@@ -81,6 +81,12 @@ def run(cfg, repo, run_id: int, *, sources=None, get_fetcher=None, now=None) -> 
                 country_fips=src.country_fips,
                 source_lang=it.source_lang or src.lang,
                 title=it.title,
+                discovery_source="registry",
+                registry_id=src.id,
+                source_tier=src.tier,
+                origin_class=src.origin_class or None,
+                ownership=src.ownership,
+                state_alignment=src.state_alignment,
             )
             discovered += 1
             per_tier[src.tier] = per_tier.get(src.tier, 0) + 1

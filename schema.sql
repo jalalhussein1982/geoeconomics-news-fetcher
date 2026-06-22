@@ -89,6 +89,14 @@ CREATE TABLE articles (
     gate_score      REAL,
     gate_country    TEXT,
     gate_reason     TEXT,
+    -- source provenance (Change 2). Set by registry discovery; NULL for gdelt-origin
+    -- rows except discovery_source. Queryable substrate for corroboration (Change 4).
+    discovery_source TEXT,                             -- 'gdelt' | 'registry'
+    registry_id     TEXT,                              -- Source.id when discovery_source='registry'
+    source_tier     SMALLINT,                          -- 0 primary | 1 wire | 2 regional
+    origin_class    TEXT[],                            -- monetary/fiscal/trade/energy/...
+    ownership       TEXT,                              -- state | state_linked | private | multilateral | foreign_gov
+    state_alignment TEXT,                              -- ISO of the state whose framing it carries
     gkg_themes      TEXT[],                            -- the ECON_*/WB_* codes that matched
     gkg_tone        REAL,
     num_mentions    INTEGER,                           -- salience tiebreaker
@@ -124,6 +132,12 @@ CREATE TABLE clusters (
     country_fips        TEXT,
     gate_score          REAL,
     article_count       INTEGER NOT NULL DEFAULT 0,
+    -- provenance aggregates over member articles (Change 2). Populated by the cluster
+    -- stage but NOT yet used for ranking — the substrate Change 4 will read.
+    tier_min                  SMALLINT,                -- best (lowest) tier among members
+    has_primary               BOOLEAN,                 -- any Tier-0 primary present
+    distinct_state_alignments INTEGER,                 -- count of distinct state_alignments
+    source_count              INTEGER,                 -- member article count
     languages           TEXT[],                        -- distinct source langs in the cluster
     -- framing-divergence flag set by Stage 2 when intra-cluster framing diverges
     framing_divergent   BOOLEAN NOT NULL DEFAULT false,

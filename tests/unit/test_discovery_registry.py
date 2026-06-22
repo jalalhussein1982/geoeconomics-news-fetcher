@@ -55,6 +55,23 @@ def test_skips_unfetchable_and_counts():
     assert repo.captured[0]["title"] == "t"
 
 
+def test_writes_registry_provenance():
+    src = _src(id="sa_cb", fetch_type="rss", status="live", country_fips="SA",
+               bucket="middle_east", tier=0, origin_class=["monetary", "macro"],
+               ownership="state", state_alignment="SA", lang="ar")
+    items = {"sa_cb": [DiscoveredItem(url="https://x/1", title="t")]}
+    repo = FakeRepo()
+    discovery_registry.run(_cfg(), repo, 1, sources=[src],
+                           get_fetcher=_fetcher_for(items), now=NOW)
+    kw = repo.captured[0]
+    assert kw["discovery_source"] == "registry"
+    assert kw["registry_id"] == "sa_cb"
+    assert kw["source_tier"] == 0
+    assert kw["origin_class"] == ["monetary", "macro"]
+    assert kw["ownership"] == "state"
+    assert kw["state_alignment"] == "SA"
+
+
 def test_bucket_filter_and_cross_cutting():
     sources = [
         # latam source but only middle_east+north_africa active -> dropped

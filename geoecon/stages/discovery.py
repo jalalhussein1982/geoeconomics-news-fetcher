@@ -104,6 +104,7 @@ def run(
             source_lang=rec.lang,
             title=None,
             gdelt_gkg_id=rec.gkg_id,
+            discovery_source="gdelt",
         )
 
     metrics = {

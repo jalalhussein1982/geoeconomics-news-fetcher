@@ -21,6 +21,14 @@ class Article:
     gate_score: float | None = None
     gate_country: str | None = None
     gate_reason: str | None = None
+    # source provenance (Change 2). Appended so positional construction from the
+    # shorter articles_in_cluster SELECT still works (these default to None there).
+    discovery_source: str | None = None
+    registry_id: str | None = None
+    source_tier: int | None = None
+    origin_class: list[str] | None = None
+    ownership: str | None = None
+    state_alignment: str | None = None
 
 @dataclass
 class Cluster:
@@ -32,6 +40,11 @@ class Cluster:
     framing_divergent: bool
     country_fips: str | None = None
     gate_score: float | None = None
+    # provenance aggregates (Change 2); populated, not yet used for ranking.
+    tier_min: int | None = None
+    has_primary: bool | None = None
+    distinct_state_alignments: int | None = None
+    source_count: int | None = None
 
 @dataclass
 class SynthesisRecord:

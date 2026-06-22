@@ -137,8 +137,17 @@ def run(cfg, repo, run_id: int, client) -> dict:
         primary = max(member_arts, key=lambda a: a.gate_score or 0.0)
         langs = sorted({a.source_lang for a in member_arts if a.source_lang})
         fp = fingerprint(primary.title, primary.source_url)
-        cid = repo.insert_cluster(run_id, fp, primary.region, langs, len(member_arts),
-                                  country_fips=primary.country_fips, gate_score=primary.gate_score)
+        # Provenance aggregates over members (Change 2): populated, not yet used
+        # for ranking. None of this changes the primary, which stays max gate_score.
+        tiers = [a.source_tier for a in member_arts if a.source_tier is not None]
+        cid = repo.insert_cluster(
+            run_id, fp, primary.region, langs, len(member_arts),
+            country_fips=primary.country_fips, gate_score=primary.gate_score,
+            tier_min=min(tiers) if tiers else None,
+            has_primary=any(a.source_tier == 0 for a in member_arts),
+            distinct_state_alignments=len({a.state_alignment for a in member_arts if a.state_alignment}),
+            source_count=len(member_arts),
+        )
         for a in member_arts:
             repo.add_membership(cid, a.article_id)
         n += 1

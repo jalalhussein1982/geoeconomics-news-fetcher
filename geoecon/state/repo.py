@@ -63,7 +63,9 @@ class Repo:
     def insert_article(self, run_id, *, source_url, url_hash, domain=None, region=None,
                        gkg_themes=None, gkg_tone=None, num_mentions=None, source_lang=None,
                        title=None, gdelt_gkg_id=None, canonical_url=None, published_at=None,
-                       discovered_via="gdelt", country_fips=None) -> int:
+                       discovered_via="gdelt", country_fips=None,
+                       discovery_source=None, registry_id=None, source_tier=None,
+                       origin_class=None, ownership=None, state_alignment=None) -> int:
         existing = self.conn.execute(
             "SELECT article_id FROM articles WHERE run_id=%s AND url_hash=%s",
             (run_id, url_hash)).fetchone()
@@ -72,11 +74,14 @@ class Repo:
         return self.conn.execute(
             """INSERT INTO articles(run_id, gdelt_gkg_id, source_url, canonical_url, url_hash,
                  domain, discovered_via, region, country_fips, gkg_themes, gkg_tone, num_mentions,
-                 source_lang, title, published_at)
-               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING article_id""",
+                 source_lang, title, published_at, discovery_source, registry_id, source_tier,
+                 origin_class, ownership, state_alignment)
+               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+               RETURNING article_id""",
             (run_id, gdelt_gkg_id, source_url, canonical_url, url_hash, domain, discovered_via,
              region, country_fips, gkg_themes or [], gkg_tone, num_mentions, source_lang, title,
-             published_at)
+             published_at, discovery_source, registry_id, source_tier, origin_class, ownership,
+             state_alignment)
         ).fetchone()[0]
 
     def update_extraction(self, article_id, body, fetch_status, source_lang=None,
@@ -96,7 +101,8 @@ class Repo:
     def articles_for_run(self, run_id, fetch_status=None) -> list[Article]:
         q = ("SELECT article_id, source_url, url_hash, domain, region, gkg_themes, gkg_tone, "
              "num_mentions, source_lang, title, body, fetch_status, country_fips, "
-             "gate_geoeconomic, gate_score, gate_country, gate_reason "
+             "gate_geoeconomic, gate_score, gate_country, gate_reason, "
+             "discovery_source, registry_id, source_tier, origin_class, ownership, state_alignment "
              "FROM articles WHERE run_id=%s")
         params: tuple = (run_id,)
         if fetch_status:
@@ -105,13 +111,17 @@ class Repo:
 
     # ---- clusters ----
     def insert_cluster(self, run_id, event_fingerprint, region, languages, article_count,
-                       framing_divergent=False, country_fips=None, gate_score=None) -> int:
+                       framing_divergent=False, country_fips=None, gate_score=None,
+                       tier_min=None, has_primary=None, distinct_state_alignments=None,
+                       source_count=None) -> int:
         return self.conn.execute(
             """INSERT INTO clusters(run_id, event_fingerprint, region, country_fips,
-                 languages, article_count, framing_divergent, gate_score)
-               VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING cluster_id""",
+                 languages, article_count, framing_divergent, gate_score,
+                 tier_min, has_primary, distinct_state_alignments, source_count)
+               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING cluster_id""",
             (run_id, event_fingerprint, region, country_fips, languages, article_count,
-             framing_divergent, gate_score)).fetchone()[0]
+             framing_divergent, gate_score, tier_min, has_primary, distinct_state_alignments,
+             source_count)).fetchone()[0]
 
     def add_membership(self, cluster_id, article_id, frame_label=None):
         self.conn.execute(

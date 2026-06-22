@@ -4,10 +4,12 @@ from geoecon.stages import cluster as cluster_stage
 from geoecon.state.models import Article
 
 
-def _art(aid, title, country="SA", geo=True, score=0.5, body="body"):
+def _art(aid, title, country="SA", geo=True, score=0.5, body="body",
+         source_tier=None, state_alignment=None):
     return Article(aid, f"http://x/{aid}", f"h{aid}", "d", "MENA", [], None, None,
                    "en", title, body, "extracted", country,
-                   gate_geoeconomic=geo, gate_score=score)
+                   gate_geoeconomic=geo, gate_score=score,
+                   source_tier=source_tier, state_alignment=state_alignment)
 
 
 class FakeRepo:
@@ -15,10 +17,15 @@ class FakeRepo:
         self._arts = arts; self.clusters = []; self.memberships = []
     def articles_for_run(self, rid, fetch_status=None): return self._arts
     def insert_cluster(self, run_id, fp, region, langs, count,
-                       framing_divergent=False, country_fips=None, gate_score=None):
+                       framing_divergent=False, country_fips=None, gate_score=None,
+                       tier_min=None, has_primary=None, distinct_state_alignments=None,
+                       source_count=None):
         cid = len(self.clusters) + 1
         self.clusters.append(dict(cid=cid, count=count, country_fips=country_fips,
-                                  gate_score=gate_score)); return cid
+                                  gate_score=gate_score, tier_min=tier_min,
+                                  has_primary=has_primary,
+                                  distinct_state_alignments=distinct_state_alignments,
+                                  source_count=source_count)); return cid
     def add_membership(self, cid, aid, frame_label=None):
         self.memberships.append((cid, aid))
 
@@ -45,6 +52,32 @@ def test_run_groups_per_country_via_llm():
     assert len(llm.calls) == 1               # only the multi-article country hit the LLM
     merged = [c for c in repo.clusters if c["count"] == 2][0]
     assert merged["country_fips"] == "SA" and abs(merged["gate_score"] - 0.9) < 1e-6
+
+
+def test_run_populates_cluster_aggregates():
+    # A registry primary (Tier-0, SA-aligned) + a wire (Tier-1, unaligned), one event.
+    arts = [_art(1, "Saudi raises rates", country="SA", score=0.9, source_tier=0, state_alignment="SA"),
+            _art(2, "Saudi central bank hikes", country="SA", score=0.6, source_tier=1, state_alignment=None)]
+    llm = _LLM(['{"groups": [[0, 1]]}'])
+    repo = FakeRepo(arts)
+    cluster_stage.run(_CFG, repo, 1, llm)
+    c = repo.clusters[0]
+    assert c["source_count"] == 2
+    assert c["tier_min"] == 0           # best tier among members
+    assert c["has_primary"] is True     # a Tier-0 primary is present
+    assert c["distinct_state_alignments"] == 1  # only SA (wire is unaligned/None)
+    # primary selection is unchanged — still the max gate_score article
+    assert abs(c["gate_score"] - 0.9) < 1e-6
+
+
+def test_run_aggregates_default_for_gdelt_only_cluster():
+    # GDELT-origin articles carry no provenance: aggregates degrade cleanly.
+    arts = [_art(1, "Egypt pound", country="EG", score=0.5)]
+    repo = FakeRepo(arts)
+    cluster_stage.run(_CFG, repo, 1, _LLM([]))
+    c = repo.clusters[0]
+    assert c["tier_min"] is None and c["has_primary"] is False
+    assert c["distinct_state_alignments"] == 0 and c["source_count"] == 1
 
 
 def test_run_falls_back_to_lexical_on_llm_failure():

@@ -26,3 +26,6 @@ env/
 
 # Local archive output
 /data/
+
+# Task 0 probe artifact (regenerable via tools/registry_probe.py)
+tools/registry_probe_results.json

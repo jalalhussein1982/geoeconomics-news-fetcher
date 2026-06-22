@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 
 import requests
 
-from .. import gdelt, regions
+from .. import gdelt, regions, urlnorm
 from ..config import Config
 
 log = logging.getLogger("geoecon.discovery")
@@ -72,7 +72,7 @@ def run(
         region = gdelt.region_for_country(rec.country)
         if not regions.buckets_for_country(rec.country, cfg.buckets):
             continue
-        h = gdelt.url_hash(rec.url)
+        h = urlnorm.normalized_url_hash(rec.url)
         if h in seen_hashes:
             continue
         seen_hashes.add(h)

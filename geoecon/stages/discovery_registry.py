@@ -16,7 +16,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlsplit
 
-from .. import gdelt, registry
+from .. import gdelt, registry, urlnorm
 from ..fetchers import base as fetchers_base
 
 log = logging.getLogger("geoecon.discovery_registry")
@@ -68,7 +68,7 @@ def run(cfg, repo, run_id: int, *, sources=None, get_fetcher=None, now=None) -> 
         for it in items:
             if it.ts is not None and it.ts < window_start:
                 continue  # out of window; null ts is kept (better recall)
-            h = gdelt.url_hash(it.url)
+            h = urlnorm.normalized_url_hash(it.url)
             if h in seen_hashes:
                 continue
             seen_hashes.add(h)

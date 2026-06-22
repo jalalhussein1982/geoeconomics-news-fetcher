@@ -1,0 +1,1176 @@
+# =============================================================================
+# geoecon source registry  —  sources.yaml
+# =============================================================================
+# A flat, full-metadata source registry that drives multi-strategy discovery.
+# This file is DATA, not code: edit it to add/retire/fix sources without touching
+# the pipeline. The fetcher dispatches on `fetch_type`; the corroboration layer
+# reads `tier`, `origin_class`, `ownership`, `state_alignment`; synthesis reads
+# `lang`.
+#
+# -----------------------------------------------------------------------------
+# AUTHORITY OF THIS FILE  (read before trusting any field)
+# -----------------------------------------------------------------------------
+# This registry was built in two layers with DIFFERENT confidence:
+#
+#   LIBRARIAN layer (high confidence, stable, human-verified):
+#     id, country, country_fips, bucket, institution, tier, origin_class,
+#     ownership, state_alignment, lang, reliability, notes
+#   These describe the INSTITUTION'S IDENTITY and do not rot on site redesigns.
+#
+#   MECHANICS layer (UNVERIFIED — must be resolved in-environment):
+#     fetch_type, feed_url, extract_hint
+#   Government economic sites in these regions mostly do NOT publish RSS; they
+#   are JS-rendered ASP.NET/SharePoint or custom portals that require scraping,
+#   and the wires have degraded their public RSS. Feed existence and selectors
+#   CANNOT be reliably verified outside the run environment, so every entry ships
+#   with `fetch_type: unverified` and candidate paths in `probe_paths`.
+#   ==> Claude Code resolves these in "Task 0" (see the change prompt) and writes
+#       the results back into this file. Until then, treat mechanics as TODO.
+#
+# -----------------------------------------------------------------------------
+# FIELD REFERENCE
+# -----------------------------------------------------------------------------
+#   id              stable snake_case key  (never reused / renamed)
+#   country         ISO 3166-1 alpha-2  (registry-side, human-readable)
+#   country_fips    FIPS 10-4  (what the PIPELINE buckets on — see file 01)
+#   bucket          middle_east | north_africa | latam   (active buckets)
+#   institution     display name
+#   tier            0 primary/authoritative  (the truth anchor — IS the event)
+#                   1 wire                   (the recall floor)
+#                   2 regional/national      (coverage + texture; bias-flagged)
+#                   3 firehose               (tripwire; GDELT — not listed here)
+#   origin_class    one or more of:
+#                     monetary fiscal trade energy investment sanctions macro
+#                   (spans the institutional ORIGIN of each geoeconomic topic so
+#                    "all topics equal" is structural, not aspirational)
+#   fetch_type      unverified | rss | api | scrape | dead   (mechanics layer)
+#   url             canonical human URL of the news/press section
+#   feed_url        resolved feed/API endpoint (null until Task 0)
+#   probe_paths     candidate feed paths for Task 0 to try, in priority order
+#   extract_hint    CSS selector for scrape targets (null until Task 0)
+#   lang            PRIMARY publish language (native-first policy)
+#                     ar Arabic · es Spanish · pt Portuguese · fr French
+#                     tr Turkish · fa Farsi · he Hebrew · en English
+#   ownership       state | state_linked | private | multilateral | foreign_gov
+#   state_alignment ISO of the state whose framing this source carries, or null.
+#                   Drives the corroboration layer's independence weighting:
+#                   two sources sharing a state_alignment are NOT independent.
+#   reliability     high | degraded | intermittent | absent
+#                     degraded   = publishes but thin / slow / partial
+#                     intermittent = sanctions/instability; flickers
+#                     absent     = no usable official channel; covered by wire+actor
+#   notes           caveats, language quirks, split-institution facts, ToS flags
+#   verified        ISO date the LIBRARIAN layer was checked
+#   status          live | needs_review | dead
+#
+# -----------------------------------------------------------------------------
+# POLICY DECISIONS BAKED IN (agreed during design)
+# -----------------------------------------------------------------------------
+#  * native-language-first: prefer the native feed; English mirror is fallback.
+#    Synthesis (DeepSeek V3.2) translates foreign->English downstream, so pulling
+#    the native primary is strictly better (earlier, fuller, truer).
+#  * SOCIAL sources EXCLUDED (ToS + fragility), even where they are an
+#    institution's fastest channel. Accepted coverage gap for the hard countries
+#    is carried by the wire + external-actor tiers.
+#  * WEAK-LANGUAGE EXCEPTION: for Iran (fa) and to a lesser extent Turkey (tr),
+#    where the model's translation competence thins, entries are deliberately
+#    paired with a strong-language (en/ar) corroborator so each event has a
+#    cross-checkable witness. Flagged per-entry in notes.
+#  * Tier-0 primaries are trusted by construction and may BYPASS the discovery
+#    theme/bucket gates (they are curated recall instruments); precision is left
+#    to the LLM gate. (Implemented in Change 5, not Change 1.)
+# =============================================================================
+
+meta:
+  schema_version: 1
+  generated: "2026-06-22"
+  librarian_verified: "2026-06-22"
+  mechanics_status: "UNVERIFIED — resolve via Task 0 before production use"
+  buckets: [middle_east, north_africa, latam]
+  notes: >
+    Core-15 primaries + cross-cutting wire and external-actor tiers.
+    Secondary and Long-tail countries are covered by the wire+actor tiers and
+    the GDELT firehose; their dedicated primaries are a later expansion pass.
+
+# =============================================================================
+# TIER 0 — PRIMARY / AUTHORITATIVE  (the truth anchor)
+# Per Core country: central bank (monetary/macro), finance ministry (fiscal),
+# and where they are the ORIGIN of geoeconomic events, the energy authority,
+# the SWF, and the exchange. Native-language-first.
+# =============================================================================
+
+sources:
+
+  # ---------------------------------------------------------------- SAUDI ARABIA
+  - id: sa_cb_sama
+    country: SA
+    country_fips: SA
+    bucket: middle_east
+    institution: "Saudi Central Bank (SAMA)"
+    tier: 0
+    origin_class: [monetary, macro]
+    fetch_type: unverified
+    url: "https://www.sama.gov.sa/en-US/News/pages/allnews.aspx"
+    feed_url: null
+    probe_paths: ["/ar-sa/News/Pages/AllNews.aspx", "/_api/web/lists", "/sitemap.xml", "/rss"]
+    extract_hint: null
+    lang: ar
+    ownership: state
+    state_alignment: SA
+    reliability: high
+    notes: >
+      VERIFIED no first-party RSS (ASP.NET news page). Arabic-first; EN mirror
+      lags. Statistics section is separate and structured. @SAMA_GOV on X is the
+      fastest channel but EXCLUDED (ToS). Scrape target; JS-render likely.
+    verified: "2026-06-22"
+    status: needs_review
+
+  - id: sa_mof
+    country: SA
+    country_fips: SA
+    bucket: middle_east
+    institution: "Ministry of Finance (Saudi Arabia)"
+    tier: 0
+    origin_class: [fiscal]
+    fetch_type: unverified
+    url: "https://www.mof.gov.sa/en/mediacenter/news/Pages/default.aspx"
+    feed_url: null
+    probe_paths: ["/ar/mediacenter/news/Pages/default.aspx", "/sitemap.xml", "/rss"]
+    extract_hint: null
+    lang: ar
+    ownership: state
+    state_alignment: SA
+    reliability: high
+    notes: "Budget, debt issuance, fiscal policy. Arabic-first; EN mirror."
+    verified: "2026-06-22"
+    status: needs_review
+
+  - id: sa_pif
+    country: SA
+    country_fips: SA
+    bucket: middle_east
+    institution: "Public Investment Fund (PIF)"
+    tier: 0
+    origin_class: [investment]
+    fetch_type: unverified
+    url: "https://www.pif.gov.sa/en/news-and-insights/"
+    feed_url: null
+    probe_paths: ["/ar/news-and-insights/", "/sitemap.xml", "/feed", "/rss"]
+    extract_hint: null
+    lang: en
+    ownership: state
+    state_alignment: SA
+    reliability: high
+    notes: >
+      Sovereign wealth fund — cross-border M&A/strategic-investment events that
+      do NOT appear in any in-country financial feed. EN-primary site. High
+      geoeconomic salience (deployments across MENA + globally).
+    verified: "2026-06-22"
+    status: needs_review
+
+  - id: sa_tadawul
+    country: SA
+    country_fips: SA
+    bucket: middle_east
+    institution: "Saudi Exchange (Tadawul)"
+    tier: 0
+    origin_class: [investment, macro]
+    fetch_type: unverified
+    url: "https://www.saudiexchange.sa/wps/portal/saudiexchange/newsandreports/news"
+    feed_url: null
+    probe_paths: ["/sitemap.xml", "/rss", "/feed"]
+    extract_hint: null
+    lang: ar
+    ownership: state_linked
+    state_alignment: SA
+    reliability: high
+    notes: "Listings, disclosures, market-moving filings. Arabic-first; EN mirror."
+    verified: "2026-06-22"
+    status: needs_review
+
+  # ---------------------------------------------------------------------- UAE
+  - id: ae_cb_cbuae
+    country: AE
+    country_fips: AE
+    bucket: middle_east
+    institution: "Central Bank of the UAE (CBUAE)"
+    tier: 0
+    origin_class: [monetary, macro]
+    fetch_type: unverified
+    url: "https://www.centralbank.ae/en/news-and-publications/news-and-insights/"
+    feed_url: null
+    probe_paths: ["/ar/news-and-publications/news-and-insights/", "/sitemap.xml", "/rss", "/feed"]
+    extract_hint: null
+    lang: ar
+    ownership: state
+    state_alignment: AE
+    reliability: high
+    notes: >
+      VERIFIED JS-rendered portal, no obvious first-party RSS. Arabic + strong EN
+      mirror. Scrape target; needs headless render for selector.
+    verified: "2026-06-22"
+    status: needs_review
+
+  - id: ae_mof
+    country: AE
+    country_fips: AE
+    bucket: middle_east
+    institution: "Ministry of Finance (UAE)"
+    tier: 0
+    origin_class: [fiscal]
+    fetch_type: unverified
+    url: "https://mof.gov.ae/en/media-center/news/"
+    feed_url: null
+    probe_paths: ["/ar/media-center/news/", "/sitemap.xml", "/rss"]
+    extract_hint: null
+    lang: ar
+    ownership: state
+    state_alignment: AE
+    reliability: high
+    notes: "Federal fiscal policy. Note: Abu Dhabi/Dubai also have emirate-level bodies."
+    verified: "2026-06-22"
+    status: needs_review
+
+  - id: ae_adia
+    country: AE
+    country_fips: AE
+    bucket: middle_east
+    institution: "Abu Dhabi Investment Authority (ADIA) / Mubadala / ADQ"
+    tier: 0
+    origin_class: [investment]
+    fetch_type: unverified
+    url: "https://www.mubadala.com/en/news"
+    feed_url: null
+    probe_paths: ["/sitemap.xml", "/feed", "/rss"]
+    extract_hint: null
+    lang: en
+    ownership: state
+    state_alignment: AE
+    reliability: high
+    notes: >
+      Mubadala is the most press-active of the Abu Dhabi SWFs (ADIA is opaque).
+      Cross-border strategic investment. EN-primary. Consider separate ADQ entry
+      in expansion pass.
+    verified: "2026-06-22"
+    status: needs_review
+
+  - id: ae_adx_dfm
+    country: AE
+    country_fips: AE
+    bucket: middle_east
+    institution: "Abu Dhabi Securities Exchange (ADX) / Dubai Financial Market (DFM)"
+    tier: 0
+    origin_class: [investment, macro]
+    fetch_type: unverified
+    url: "https://www.adx.ae/english/pages/news/default.aspx"
+    feed_url: null
+    probe_paths: ["/sitemap.xml", "/rss", "/feed"]
+    extract_hint: null
+    lang: en
+    ownership: state_linked
+    state_alignment: AE
+    reliability: high
+    notes: "Two exchanges; ADX listed as primary. DFM may warrant its own entry."
+    verified: "2026-06-22"
+    status: needs_review
+
+  # ---------------------------------------------------------------------- EGYPT
+  # NOTE: Egypt is in BOTH middle_east AND north_africa buckets (file 01).
+  # Registry tags bucket: middle_east as primary; regions.py handles dual-bucket.
+  - id: eg_cb_cbe
+    country: EG
+    country_fips: EG
+    bucket: middle_east
+    institution: "Central Bank of Egypt (CBE)"
+    tier: 0
+    origin_class: [monetary, macro]
+    fetch_type: unverified
+    url: "https://www.cbe.org.eg/en/news-publications/news"
+    feed_url: null
+    probe_paths: ["/ar/news-publications/news", "/sitemap.xml", "/rss", "/feed"]
+    extract_hint: null
+    lang: ar
+    ownership: state
+    state_alignment: EG
+    reliability: high
+    notes: >
+      HIGH-SALIENCE: EGP devaluations, IMF-program rate moves are core daily
+      events. Arabic-first; EN mirror. Egypt dual-buckets ME + NA.
+    verified: "2026-06-22"
+    status: needs_review
+
+  - id: eg_mof
+    country: EG
+    country_fips: EG
+    bucket: middle_east
+    institution: "Ministry of Finance (Egypt)"
+    tier: 0
+    origin_class: [fiscal]
+    fetch_type: unverified
+    url: "https://www.mof.gov.eg/en/posts/news"
+    feed_url: null
+    probe_paths: ["/ar/posts/news", "/sitemap.xml", "/rss"]
+    extract_hint: null
+    lang: ar
+    ownership: state
+    state_alignment: EG
+    reliability: high
+    notes: "Debt, budget, IMF-linked fiscal measures. Arabic-first."
+    verified: "2026-06-22"
+    status: needs_review
+
+  # ---------------------------------------------------------------------- TURKEY
+  - id: tr_cb_tcmb
+    country: TR
+    country_fips: TU          # FIPS for Turkey is TU, not TR — pipeline buckets on this
+    bucket: middle_east
+    institution: "Central Bank of the Republic of Türkiye (TCMB)"
+    tier: 0
+    origin_class: [monetary, macro]
+    fetch_type: unverified
+    url: "https://www.tcmb.gov.tr/wps/wcm/connect/en/tcmb+en/main+menu/announcements"
+    feed_url: null
+    probe_paths: ["/wps/wcm/connect/tr/tcmb+tr", "/sitemap.xml", "/rss", "/feed"]
+    extract_hint: null
+    lang: tr
+    ownership: state
+    state_alignment: TR
+    reliability: high
+    notes: >
+      FIPS=TU (not TR) — easy bucketing bug. HIGH-SALIENCE: rate decisions, lira.
+      WEAK-LANGUAGE pair: Turkish primary; ensure a strong-lang corroborator
+      (Reuters TR desk / AA English) clusters with it. Strong EN mirror exists.
+    verified: "2026-06-22"
+    status: needs_review
+
+  - id: tr_mof_hmb
+    country: TR
+    country_fips: TU
+    bucket: middle_east
+    institution: "Ministry of Treasury and Finance (Türkiye)"
+    tier: 0
+    origin_class: [fiscal, macro]
+    fetch_type: unverified
+    url: "https://www.hmb.gov.tr/duyurular"
+    feed_url: null
+    probe_paths: ["/en/announcements", "/sitemap.xml", "/rss"]
+    extract_hint: null
+    lang: tr
+    ownership: state
+    state_alignment: TR
+    reliability: high
+    notes: "Treasury + finance merged. Turkish-first; EN mirror partial."
+    verified: "2026-06-22"
+    status: needs_review
+
+  # ---------------------------------------------------------------------- ISRAEL
+  - id: il_cb_boi
+    country: IL
+    country_fips: IS          # FIPS for Israel is IS — another easy bug
+    bucket: middle_east
+    institution: "Bank of Israel (BOI)"
+    tier: 0
+    origin_class: [monetary, macro]
+    fetch_type: unverified
+    url: "https://www.boi.org.il/en/communication-and-publications/press-releases/"
+    feed_url: null
+    probe_paths: ["/he/communication-and-publications/press-releases/", "/rss", "/feed", "/sitemap.xml"]
+    extract_hint: null
+    lang: he
+    ownership: state
+    state_alignment: IL
+    reliability: high
+    notes: >
+      FIPS=IS. Hebrew primary; EXCELLENT EN mirror (BOI publishes EN promptly —
+      English may be acceptable here as primary). Model handles he reasonably.
+    verified: "2026-06-22"
+    status: needs_review
+
+  - id: il_mof
+    country: IL
+    country_fips: IS
+    bucket: middle_east
+    institution: "Ministry of Finance (Israel)"
+    tier: 0
+    origin_class: [fiscal]
+    fetch_type: unverified
+    url: "https://www.gov.il/en/departments/ministry_of_finance/govil-landing-page"
+    feed_url: null
+    probe_paths: ["/he/departments/ministry_of_finance", "/api/", "/rss", "/sitemap.xml"]
+    extract_hint: null
+    lang: he
+    ownership: state
+    state_alignment: IL
+    reliability: high
+    notes: "On gov.il unified platform — may expose a JSON API (probe /api/)."
+    verified: "2026-06-22"
+    status: needs_review
+
+  - id: il_tase
+    country: IL
+    country_fips: IS
+    bucket: middle_east
+    institution: "Tel Aviv Stock Exchange (TASE)"
+    tier: 0
+    origin_class: [investment, macro]
+    fetch_type: unverified
+    url: "https://www.tase.co.il/en/market_data/news"
+    feed_url: null
+    probe_paths: ["/he/market_data/news", "/api/", "/rss"]
+    extract_hint: null
+    lang: he
+    ownership: private
+    state_alignment: IL
+    reliability: high
+    notes: "Demutualized exchange. Strong EN. Likely has an API (probe)."
+    verified: "2026-06-22"
+    status: needs_review
+
+  # ---------------------------------------------------------------------- QATAR
+  - id: qa_cb_qcb
+    country: QA
+    country_fips: QA
+    bucket: middle_east
+    institution: "Qatar Central Bank (QCB)"
+    tier: 0
+    origin_class: [monetary, macro]
+    fetch_type: unverified
+    url: "https://www.qcb.gov.qa/en/news/"
+    feed_url: null
+    probe_paths: ["/ar/news/", "/sitemap.xml", "/rss", "/feed"]
+    extract_hint: null
+    lang: ar
+    ownership: state
+    state_alignment: QA
+    reliability: high
+    notes: "Arabic-first; EN mirror. QIA (SWF) is near-opaque — no reliable feed."
+    verified: "2026-06-22"
+    status: needs_review
+
+  - id: qa_qia
+    country: QA
+    country_fips: QA
+    bucket: middle_east
+    institution: "Qatar Investment Authority (QIA)"
+    tier: 0
+    origin_class: [investment]
+    fetch_type: unverified
+    url: "https://www.qia.qa/en/News/Pages/default.aspx"
+    feed_url: null
+    probe_paths: ["/sitemap.xml", "/rss"]
+    extract_hint: null
+    lang: en
+    ownership: state
+    state_alignment: QA
+    reliability: degraded
+    notes: >
+      Opaque SWF, rare press releases. Most QIA deals break via wires, not the
+      QIA site — DEGRADED; lean on wire tier for QIA-deal events.
+    verified: "2026-06-22"
+    status: needs_review
+
+  # ---------------------------------------------------------------------- KUWAIT
+  - id: kw_cb_cbk
+    country: KW
+    country_fips: KU          # FIPS Kuwait = KU
+    bucket: middle_east
+    institution: "Central Bank of Kuwait (CBK)"
+    tier: 0
+    origin_class: [monetary, macro]
+    fetch_type: unverified
+    url: "https://www.cbk.gov.kw/en/cbk-news/announcements-and-press-releases"
+    feed_url: null
+    probe_paths: ["/ar/cbk-news/announcements-and-press-releases", "/sitemap.xml", "/rss"]
+    extract_hint: null
+    lang: ar
+    ownership: state
+    state_alignment: KW
+    reliability: high
+    notes: "FIPS=KU. Arabic-first; EN mirror. KIA (SWF) opaque — wire-covered."
+    verified: "2026-06-22"
+    status: needs_review
+
+  - id: kw_mof
+    country: KW
+    country_fips: KU
+    bucket: middle_east
+    institution: "Ministry of Finance (Kuwait)"
+    tier: 0
+    origin_class: [fiscal]
+    fetch_type: unverified
+    url: "https://www.mof.gov.kw/MOFNews/index.aspx"
+    feed_url: null
+    probe_paths: ["/sitemap.xml", "/rss"]
+    extract_hint: null
+    lang: ar
+    ownership: state
+    state_alignment: KW
+    reliability: degraded
+    notes: "Budget, deficit-finance debate. Site dated; Arabic-first; scrape."
+    verified: "2026-06-22"
+    status: needs_review
+
+  # ---------------------------------------------------------------------- IRAN
+  - id: ir_cb_cbi
+    country: IR
+    country_fips: IR
+    bucket: middle_east
+    institution: "Central Bank of the Islamic Republic of Iran (CBI)"
+    tier: 0
+    origin_class: [monetary, macro]
+    fetch_type: unverified
+    url: "https://www.cbi.ir/default_en.aspx"
+    feed_url: null
+    probe_paths: ["/default.aspx", "/rss", "/sitemap.xml"]
+    extract_hint: null
+    lang: fa
+    ownership: state
+    state_alignment: IR
+    reliability: intermittent
+    notes: >
+      WEAK-LANGUAGE + SANCTIONS-DEGRADED. Farsi primary; model fa competence
+      thin. Site intermittently reachable from outside IR. MANDATORY strong-lang
+      pairing — cluster with Reuters/Al Jazeera/Al-Monitor IR coverage so every
+      Iran event has an en/ar witness. Do NOT rely on CBI alone.
+    verified: "2026-06-22"
+    status: needs_review
+
+  # ---------------------------------------------------------------------- IRAQ
+  - id: iq_cb_cbi
+    country: IQ
+    country_fips: IZ          # FIPS Iraq = IZ
+    bucket: middle_east
+    institution: "Central Bank of Iraq (CBI)"
+    tier: 0
+    origin_class: [monetary, macro]
+    fetch_type: unverified
+    url: "https://cbi.iq/news"
+    feed_url: null
+    probe_paths: ["/news?lang=en", "/rss", "/sitemap.xml"]
+    extract_hint: null
+    lang: ar
+    ownership: state
+    state_alignment: IQ
+    reliability: degraded
+    notes: >
+      FIPS=IZ. Dinar auctions, USD-flow controls = high geoeconomic salience.
+      Arabic-first; EN partial. Pair with wire tier (Rudaw/Reuters Baghdad).
+    verified: "2026-06-22"
+    status: needs_review
+
+  # ----------------------------------------------- CORE LATAM: BRAZIL
+  - id: br_cb_bcb
+    country: BR
+    country_fips: BR
+    bucket: latam
+    institution: "Banco Central do Brasil (BCB)"
+    tier: 0
+    origin_class: [monetary, macro]
+    fetch_type: unverified
+    url: "https://www.bcb.gov.br/en/pressdetail"
+    feed_url: null
+    probe_paths: ["/api/", "/rss", "/feed", "/sitemap.xml", "/pt-br/#!/home"]
+    extract_hint: null
+    lang: pt
+    ownership: state
+    state_alignment: BR
+    reliability: high
+    notes: >
+      HIGH-SALIENCE: Selic decisions, FX intervention. Portuguese-first; strong
+      EN. BCB historically exposes a JSON/OData API — PROBE /api/ first.
+    verified: "2026-06-22"
+    status: needs_review
+
+  - id: br_mof_fazenda
+    country: BR
+    country_fips: BR
+    bucket: latam
+    institution: "Ministério da Fazenda (Brazil)"
+    tier: 0
+    origin_class: [fiscal, macro]
+    fetch_type: unverified
+    url: "https://www.gov.br/fazenda/pt-br/assuntos/noticias"
+    feed_url: null
+    probe_paths: ["/noticias/feed", "/rss", "/sitemap.xml"]
+    extract_hint: null
+    lang: pt
+    ownership: state
+    state_alignment: BR
+    reliability: high
+    notes: >
+      On gov.br (Plone-based) — Plone sites OFTEN expose RSS at .../noticias/feed
+      or @@rss. PROBE that first; good chance of a clean feed here.
+    verified: "2026-06-22"
+    status: needs_review
+
+  - id: br_b3
+    country: BR
+    country_fips: BR
+    bucket: latam
+    institution: "B3 (Brazil Stock Exchange)"
+    tier: 0
+    origin_class: [investment, macro]
+    fetch_type: unverified
+    url: "https://www.b3.com.br/en_us/news/"
+    feed_url: null
+    probe_paths: ["/pt_br/noticias/", "/rss", "/sitemap.xml"]
+    extract_hint: null
+    lang: pt
+    ownership: private
+    state_alignment: null
+    reliability: high
+    notes: "Private exchange. Portuguese-first; EN mirror."
+    verified: "2026-06-22"
+    status: needs_review
+
+  # ----------------------------------------------- CORE LATAM: MEXICO
+  - id: mx_cb_banxico
+    country: MX
+    country_fips: MX
+    bucket: latam
+    institution: "Banco de México (Banxico)"
+    tier: 0
+    origin_class: [monetary, macro]
+    fetch_type: unverified
+    url: "https://www.banxico.org.mx/publicaciones-y-prensa/comunicados-de-prensa/index.html"
+    feed_url: null
+    probe_paths: ["/SieAPIRest/", "/rss", "/sitemap.xml"]
+    extract_hint: null
+    lang: es
+    ownership: state
+    state_alignment: MX
+    reliability: high
+    notes: >
+      Spanish-first; strong EN. Banxico has a well-documented data API
+      (SIE API) — PROBE for a press/comunicados endpoint.
+    verified: "2026-06-22"
+    status: needs_review
+
+  - id: mx_shcp
+    country: MX
+    country_fips: MX
+    bucket: latam
+    institution: "Secretaría de Hacienda y Crédito Público (SHCP)"
+    tier: 0
+    origin_class: [fiscal, macro]
+    fetch_type: unverified
+    url: "https://www.gob.mx/hacienda/prensa"
+    feed_url: null
+    probe_paths: ["/hacienda/articulos/feed", "/rss", "/sitemap.xml"]
+    extract_hint: null
+    lang: es
+    ownership: state
+    state_alignment: MX
+    reliability: high
+    notes: "On gob.mx unified platform. Spanish-first. Probe for platform-wide feed."
+    verified: "2026-06-22"
+    status: needs_review
+
+  # ----------------------------------------------- CORE LATAM: ARGENTINA
+  - id: ar_cb_bcra
+    country: AR
+    country_fips: AR
+    bucket: latam
+    institution: "Banco Central de la República Argentina (BCRA)"
+    tier: 0
+    origin_class: [monetary, macro]
+    fetch_type: unverified
+    url: "https://www.bcra.gob.ar/Noticias/Noticias.asp"
+    feed_url: null
+    probe_paths: ["/rss", "/sitemap.xml", "/Noticias/principales-variables.asp"]
+    extract_hint: null
+    lang: es
+    ownership: state
+    state_alignment: AR
+    reliability: high
+    notes: >
+      VERY HIGH-SALIENCE: peso, reserves, capital controls, IMF program. The
+      single most event-dense LatAm primary. Spanish-only; weak/no EN mirror.
+    verified: "2026-06-22"
+    status: needs_review
+
+  - id: ar_economia
+    country: AR
+    country_fips: AR
+    bucket: latam
+    institution: "Ministerio de Economía (Argentina)"
+    tier: 0
+    origin_class: [fiscal, macro, trade]
+    fetch_type: unverified
+    url: "https://www.argentina.gob.ar/economia/noticias"
+    feed_url: null
+    probe_paths: ["/economia/noticias/feed", "/rss", "/sitemap.xml"]
+    extract_hint: null
+    lang: es
+    ownership: state
+    state_alignment: AR
+    reliability: high
+    notes: "Consolidated economy ministry. Spanish-only. argentina.gob.ar platform."
+    verified: "2026-06-22"
+    status: needs_review
+
+  # ----------------------------------------------- CORE LATAM: CHILE
+  - id: cl_cb_bcch
+    country: CL
+    country_fips: CI          # FIPS Chile = CI
+    bucket: latam
+    institution: "Banco Central de Chile (BCCh)"
+    tier: 0
+    origin_class: [monetary, macro]
+    fetch_type: unverified
+    url: "https://www.bcentral.cl/en/areas/communications/press-releases"
+    feed_url: null
+    probe_paths: ["/areas/comunicaciones/comunicados-de-prensa", "/rss", "/sitemap.xml", "/api/"]
+    extract_hint: null
+    lang: es
+    ownership: state
+    state_alignment: CL
+    reliability: high
+    notes: >
+      FIPS=CI (collides intuitively with Côte d'Ivoire — keep FIPS discipline).
+      Copper-driven economy = commodity geoeconomics. Spanish-first; strong EN.
+    verified: "2026-06-22"
+    status: needs_review
+
+  # ----------------------------------------------- CORE LATAM: COLOMBIA
+  - id: co_cb_banrep
+    country: CO
+    country_fips: CO
+    bucket: latam
+    institution: "Banco de la República (Colombia)"
+    tier: 0
+    origin_class: [monetary, macro]
+    fetch_type: unverified
+    url: "https://www.banrep.gov.co/en/news"
+    feed_url: null
+    probe_paths: ["/es/noticias", "/rss", "/sitemap.xml"]
+    extract_hint: null
+    lang: es
+    ownership: state
+    state_alignment: CO
+    reliability: high
+    notes: "Spanish-first; EN mirror. Coffee/oil/coal commodity exposure."
+    verified: "2026-06-22"
+    status: needs_review
+
+  # ----------------------------------------------- CORE LATAM: GUYANA (oil anomaly)
+  - id: gy_bog
+    country: GY
+    country_fips: GY
+    bucket: latam
+    institution: "Bank of Guyana"
+    tier: 0
+    origin_class: [monetary, macro, energy]
+    fetch_type: unverified
+    url: "https://www.bankofguyana.org.gy/bog/news"
+    feed_url: null
+    probe_paths: ["/rss", "/sitemap.xml"]
+    extract_hint: null
+    lang: en
+    ownership: state
+    state_alignment: GY
+    reliability: degraded
+    notes: >
+      ANOMALY: fastest-growing economy on earth (ExxonMobil offshore oil) — punches
+      far above size on the geoeconomic beat. EN-native. Small institution, thin
+      web presence (DEGRADED) — the OIL story breaks via Exxon filings + wires, so
+      pair heavily with energy-actor + wire tiers, not the central bank alone.
+    verified: "2026-06-22"
+    status: needs_review
+
+# =============================================================================
+# TIER 1 — WIRE SERVICES  (the recall floor)
+# Cross-cutting; not country-keyed. These are the guarantee against missing a
+# major. NOTE: the global wires have DEGRADED first-party RSS post-2020 — probe
+# for current first-party feeds; do NOT hardcode third-party (rss.app) feeds.
+# Regional desks/wires are first-class here because they carry native-language
+# recall the globals miss.
+# =============================================================================
+
+  - id: wire_ap
+    country: null
+    country_fips: null
+    bucket: null
+    institution: "Associated Press"
+    tier: 1
+    origin_class: [macro, trade, energy, fiscal, monetary, investment, sanctions]
+    fetch_type: unverified
+    url: "https://apnews.com/hub/economy"
+    feed_url: null
+    probe_paths: ["/rss", "/index.rss", "/hub/economy/feed"]
+    extract_hint: null
+    lang: en
+    ownership: private
+    state_alignment: null
+    reliability: high
+    notes: "Cleanest surviving first-party wire RSS. Recall floor anchor."
+    verified: "2026-06-22"
+    status: needs_review
+
+  - id: wire_reuters_world
+    country: null
+    country_fips: null
+    bucket: null
+    institution: "Reuters (World / Markets / regional desks)"
+    tier: 1
+    origin_class: [macro, trade, energy, fiscal, monetary, investment, sanctions]
+    fetch_type: unverified
+    url: "https://www.reuters.com/markets/"
+    feed_url: null
+    probe_paths: ["/rssfeed/", "/tools/rss", "/arc/outboundfeeds/rss/"]
+    extract_hint: null
+    lang: en
+    ownership: private
+    state_alignment: null
+    reliability: degraded
+    notes: >
+      DEGRADED first-party RSS. Probe arc outbound feeds. If no first-party feed,
+      Reuters coverage still arrives via GDELT firehose — do NOT scrape behind
+      paywall. Critical strong-lang corroborator for Iran/Turkey events.
+    verified: "2026-06-22"
+    status: needs_review
+
+  - id: wire_aa_anadolu
+    country: null
+    country_fips: null
+    bucket: middle_east
+    institution: "Anadolu Agency (AA)"
+    tier: 1
+    origin_class: [macro, trade, energy, fiscal, monetary, sanctions]
+    fetch_type: unverified
+    url: "https://www.aa.com.tr/en/economy"
+    feed_url: null
+    probe_paths: ["/en/rss/default?cat=economy", "/rss", "/en/rss"]
+    extract_hint: null
+    lang: en
+    ownership: state
+    state_alignment: TR
+    reliability: high
+    notes: >
+      Turkish state wire — STATE_ALIGNMENT=TR (carries Turkish framing; NOT an
+      independent witness to Turkey-Syria-Gulf stories). Strong-lang corroborator
+      for Turkey events. Known to publish real RSS (probe cat=economy). Multilang.
+    verified: "2026-06-22"
+    status: needs_review
+
+  - id: wire_efe
+    country: null
+    country_fips: null
+    bucket: latam
+    institution: "Agencia EFE (LatAm desks)"
+    tier: 1
+    origin_class: [macro, trade, energy, fiscal, monetary, investment]
+    fetch_type: unverified
+    url: "https://efe.com/economia/"
+    feed_url: null
+    probe_paths: ["/economia/feed/", "/rss", "/feed"]
+    extract_hint: null
+    lang: es
+    ownership: state_linked
+    state_alignment: ES
+    reliability: high
+    notes: >
+      Spanish wire with deep LatAm coverage — Spanish-native recall floor for the
+      latam bucket. state_alignment=ES (Spanish gov-linked) — minor; mostly
+      neutral on LatAm-internal economics.
+    verified: "2026-06-22"
+    status: needs_review
+
+  - id: wire_bloomberg_linea
+    country: null
+    country_fips: null
+    bucket: latam
+    institution: "Bloomberg Línea (LatAm)"
+    tier: 1
+    origin_class: [macro, monetary, investment, energy]
+    fetch_type: unverified
+    url: "https://www.bloomberglinea.com/"
+    feed_url: null
+    probe_paths: ["/feed/", "/rss", "/arc/outboundfeeds/rss/"]
+    extract_hint: null
+    lang: es
+    ownership: private
+    state_alignment: null
+    reliability: high
+    notes: "Bloomberg's Spanish/Portuguese LatAm arm — more open than bloomberg.com."
+    verified: "2026-06-22"
+    status: needs_review
+
+# =============================================================================
+# TIER 2 — REGIONAL / NATIONAL OUTLETS  (coverage + texture; BIAS-FLAGGED)
+# These get stories the wires undercover and local context — but they carry
+# state framing, so state_alignment is set and the corroboration layer must NOT
+# treat two co-aligned outlets as independent witnesses.
+# =============================================================================
+
+  - id: reg_aljazeera_ar
+    country: null
+    country_fips: null
+    bucket: middle_east
+    institution: "Al Jazeera (Arabic — Economy)"
+    tier: 2
+    origin_class: [macro, trade, energy, fiscal, monetary, sanctions, investment]
+    fetch_type: unverified
+    url: "https://www.aljazeera.net/economy/"
+    feed_url: null
+    probe_paths: ["/xml/rss/all.xml", "/rss", "/feed"]
+    extract_hint: null
+    lang: ar
+    ownership: state_linked
+    state_alignment: QA
+    reliability: high
+    notes: >
+      Qatari-funded — STATE_ALIGNMENT=QA. Arabic desk (deeper than English).
+      Strong on Gulf, Levant, sanctions framing. NOT independent of Qatar-aligned
+      sources. Known historic RSS at /xml/rss/all.xml (probe).
+    verified: "2026-06-22"
+    status: needs_review
+
+  - id: reg_alarabiya_ar
+    country: null
+    country_fips: null
+    bucket: middle_east
+    institution: "Al Arabiya (Arabic — Aswaq/Economy)"
+    tier: 2
+    origin_class: [macro, trade, energy, fiscal, monetary, investment]
+    fetch_type: unverified
+    url: "https://www.alarabiya.net/aswaq"
+    feed_url: null
+    probe_paths: ["/.mrss.xml", "/feed/rss2/ar/aswaq.xml", "/rss"]
+    extract_hint: null
+    lang: ar
+    ownership: state_linked
+    state_alignment: SA
+    reliability: high
+    notes: >
+      Saudi-owned — STATE_ALIGNMENT=SA. The deliberate counterweight to AJ's QA
+      framing: pairing AJ(QA)+AlArabiya(SA) on a Gulf story is GOOD corroboration
+      hygiene (different alignments). Arabic desk. JS-heavy; probe RSS.
+    verified: "2026-06-22"
+    status: needs_review
+
+  - id: reg_almonitor
+    country: null
+    country_fips: null
+    bucket: middle_east
+    institution: "Al-Monitor"
+    tier: 2
+    origin_class: [macro, energy, sanctions, trade, investment]
+    fetch_type: unverified
+    url: "https://www.al-monitor.com/contents/economy"
+    feed_url: null
+    probe_paths: ["/rss", "/feed", "/rss.xml"]
+    extract_hint: null
+    lang: en
+    ownership: private
+    state_alignment: null
+    reliability: high
+    notes: >
+      EN analytical coverage of MENA incl. Iran economy — useful strong-lang
+      corroborator for the fa weak-language gap. Relatively independent.
+    verified: "2026-06-22"
+    status: needs_review
+
+  - id: reg_valor_br
+    country: BR
+    country_fips: BR
+    bucket: latam
+    institution: "Valor Econômico (Brazil)"
+    tier: 2
+    origin_class: [macro, monetary, fiscal, investment, trade, energy]
+    fetch_type: unverified
+    url: "https://valor.globo.com/"
+    feed_url: null
+    probe_paths: ["/rss/", "/feed/", "/rss/feed/"]
+    extract_hint: null
+    lang: pt
+    ownership: private
+    state_alignment: null
+    reliability: high
+    notes: "Brazil's leading business daily. Portuguese. Some content paywalled."
+    verified: "2026-06-22"
+    status: needs_review
+
+  - id: reg_americaeconomia
+    country: null
+    country_fips: null
+    bucket: latam
+    institution: "AméricaEconomía"
+    tier: 2
+    origin_class: [macro, trade, investment, energy, monetary]
+    fetch_type: unverified
+    url: "https://www.americaeconomia.com/"
+    feed_url: null
+    probe_paths: ["/rss.xml", "/feed", "/rss"]
+    extract_hint: null
+    lang: es
+    ownership: private
+    state_alignment: null
+    reliability: high
+    notes: "Pan-LatAm business coverage — region-scoped, fills cross-border gaps."
+    verified: "2026-06-22"
+    status: needs_review
+
+# =============================================================================
+# EXTERNAL-ACTOR TIER  (the geoeconomics layer — load-bearing under "all topics
+# equal"). These produce the INTER-national economic events that ARE the subject
+# of geoeconomics: sanctions, multilateral programs, strategic lending. They are
+# keyed to ACTORS, not to your country list. Events here are datelined OUTSIDE
+# the target country (Washington, DC; etc.) — the GATE must attribute them to the
+# AFFECTED country to bucket correctly (handled in Change 5). tier=0 (primary:
+# an OFAC designation IS the event) but flagged actor-keyed.
+# =============================================================================
+
+  - id: actor_us_ofac
+    country: null
+    country_fips: null
+    bucket: null
+    institution: "US Treasury OFAC (sanctions actions)"
+    tier: 0
+    origin_class: [sanctions]
+    fetch_type: unverified
+    url: "https://ofac.treasury.gov/recent-actions"
+    feed_url: null
+    probe_paths: ["/recent-actions/feed", "/system/files/...", "/rss"]
+    extract_hint: null
+    lang: en
+    ownership: foreign_gov
+    state_alignment: US
+    reliability: high
+    notes: >
+      ACTOR-KEYED. Sanctions on Iran/Syria/Venezuela/etc. are datelined DC — gate
+      must map to the AFFECTED country's bucket (Change 5). OFAC publishes
+      structured recent-actions; probe for feed/JSON. PRIMARY: the designation
+      IS the event.
+    verified: "2026-06-22"
+    status: needs_review
+
+  - id: actor_us_treasury_press
+    country: null
+    country_fips: null
+    bucket: null
+    institution: "US Treasury (press releases)"
+    tier: 0
+    origin_class: [sanctions, fiscal, trade]
+    fetch_type: unverified
+    url: "https://home.treasury.gov/news/press-releases"
+    feed_url: null
+    probe_paths: ["/news/press-releases/feed", "/rss.xml", "/rss"]
+    extract_hint: null
+    lang: en
+    ownership: foreign_gov
+    state_alignment: US
+    reliability: high
+    notes: "Broader than OFAC: tariffs, bilateral finance. Actor-keyed."
+    verified: "2026-06-22"
+    status: needs_review
+
+  - id: actor_eu_sanctions
+    country: null
+    country_fips: null
+    bucket: null
+    institution: "EU Council (restrictive measures / sanctions)"
+    tier: 0
+    origin_class: [sanctions, trade]
+    fetch_type: unverified
+    url: "https://www.consilium.europa.eu/en/policies/sanctions/"
+    feed_url: null
+    probe_paths: ["/en/press/press-releases/?format=rss", "/rss", "/feed"]
+    extract_hint: null
+    lang: en
+    ownership: multilateral
+    state_alignment: EU
+    reliability: high
+    notes: "Actor-keyed. EU measures on Syria/Russia-linked-MENA trade etc."
+    verified: "2026-06-22"
+    status: needs_review
+
+  - id: actor_imf
+    country: null
+    country_fips: null
+    bucket: null
+    institution: "IMF (press releases / country programs)"
+    tier: 0
+    origin_class: [macro, fiscal, monetary]
+    fetch_type: unverified
+    url: "https://www.imf.org/en/News"
+    feed_url: null
+    probe_paths: ["/external/rss/feeds.aspx", "/en/News/rss", "/rss"]
+    extract_hint: null
+    lang: en
+    ownership: multilateral
+    state_alignment: null
+    reliability: high
+    notes: >
+      ACTOR-KEYED, very high salience: program agreements/reviews for Egypt,
+      Argentina, Pakistan-adjacent, etc. ARE the geoeconomic event. IMF has a
+      long-standing RSS hub (probe external/rss). PRIMARY for program news.
+    verified: "2026-06-22"
+    status: needs_review
+
+  - id: actor_worldbank
+    country: null
+    country_fips: null
+    bucket: null
+    institution: "World Bank (news / country)"
+    tier: 0
+    origin_class: [macro, fiscal, trade]
+    fetch_type: unverified
+    url: "https://www.worldbank.org/en/news"
+    feed_url: null
+    probe_paths: ["/en/news/all?format=rss", "/rss", "/feed"]
+    extract_hint: null
+    lang: en
+    ownership: multilateral
+    state_alignment: null
+    reliability: high
+    notes: "Actor-keyed. Lending, country diagnostics. Probe for RSS hub."
+    verified: "2026-06-22"
+    status: needs_review
+
+  - id: actor_opec
+    country: null
+    country_fips: null
+    bucket: null
+    institution: "OPEC (press releases)"
+    tier: 0
+    origin_class: [energy]
+    fetch_type: unverified
+    url: "https://www.opec.org/opec_web/en/press_room/28.htm"
+    feed_url: null
+    probe_paths: ["/opec_web/en/press_room/rss.xml", "/rss", "/feed"]
+    extract_hint: null
+    lang: en
+    ownership: multilateral
+    state_alignment: null
+    reliability: high
+    notes: >
+      ACTOR-KEYED, energy. Quota decisions move every Gulf + Iraq + LatAm-oil
+      economy at once — one OPEC event maps to MANY buckets. The gate/cluster
+      must allow multi-country attribution for these (note for Change 5).
+    verified: "2026-06-22"
+    status: needs_review
+
+  - id: actor_china_mofcom
+    country: null
+    country_fips: null
+    bucket: null
+    institution: "China MOFCOM / Exim (BRI, trade, lending)"
+    tier: 1
+    origin_class: [trade, investment, energy]
+    fetch_type: unverified
+    url: "http://english.mofcom.gov.cn/"
+    feed_url: null
+    probe_paths: ["/rss", "/feed", "/article/newsrelease/"]
+    extract_hint: null
+    lang: en
+    ownership: foreign_gov
+    state_alignment: CN
+    reliability: degraded
+    notes: >
+      ACTOR-KEYED. China BRI/port/lithium/lending events in MENA+LatAm — the
+      defining geoeconomics of the decade, invisible to in-country financial
+      feeds. state_alignment=CN (carries Chinese framing). EN mirror partial/
+      DEGRADED; pair with wire corroboration. Consider AIIB/CDB in expansion.
+    verified: "2026-06-22"
+    status: needs_review

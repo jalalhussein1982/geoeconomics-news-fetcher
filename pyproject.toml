@@ -8,6 +8,8 @@ dependencies = [
     "psycopg[binary]>=3.1",
     "trafilatura>=1.8",
     "Jinja2>=3.1",
+    "feedparser>=6.0",
+    "cssselect>=1.2",
 ]
 
 [project.optional-dependencies]

@@ -32,6 +32,7 @@ class Config:
     window_hours: int = 24
     timezone: str = "Europe/Prague"
     archive_dir: str = "/data/archive"
+    sources_path: str | None = None  # registry path; None => registry.default_path()
     send_heartbeat: bool = True
     dry_run: bool = False
     limit: int | None = None
@@ -66,6 +67,7 @@ class Config:
             window_hours=int(env.get("WINDOW_HOURS", "24")),
             timezone=env.get("TIMEZONE", "Europe/Prague"),
             archive_dir=env.get("ARCHIVE_DIR", "/data/archive"),
+            sources_path=env.get("SOURCES_PATH") or None,
             send_heartbeat=env.get("SEND_HEARTBEAT", "true").lower() == "true",
             dry_run=env.get("DRY_RUN", "false").lower() == "true",
             limit=int(limit) if limit else None,

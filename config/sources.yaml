@@ -85,7 +85,7 @@ meta:
   schema_version: 1
   generated: "2026-06-22"
   librarian_verified: "2026-06-22"
-  mechanics_status: "UNVERIFIED — resolve via Task 0 before production use"
+  mechanics_status: "RESOLVED via Task 0 on 2026-06-23 (live prober, robots-respecting): 11 rss/live, 37 scrape/needs_review, 0 dead. See sources.resolved.report.md."
   buckets: [middle_east, north_africa, latam]
   notes: >
     Core-15 primaries + cross-cutting wire and external-actor tiers.
@@ -109,7 +109,7 @@ sources:
     institution: "Saudi Central Bank (SAMA)"
     tier: 0
     origin_class: [monetary, macro]
-    fetch_type: unverified
+    fetch_type: scrape
     url: "https://www.sama.gov.sa/en-US/News/pages/allnews.aspx"
     feed_url: null
     probe_paths: ["/ar-sa/News/Pages/AllNews.aspx", "/_api/web/lists", "/sitemap.xml", "/rss"]
@@ -118,11 +118,9 @@ sources:
     ownership: state
     state_alignment: SA
     reliability: high
-    notes: >
-      VERIFIED no first-party RSS (ASP.NET news page). Arabic-first; EN mirror
-      lags. Statistics section is separate and structured. @SAMA_GOV on X is the
-      fastest channel but EXCLUDED (ToS). Scrape target; JS-render likely.
-    verified: "2026-06-22"
+    notes: >-
+      VERIFIED no first-party RSS (ASP.NET news page). Arabic-first; EN mirror lags. Statistics section is separate and structured. @SAMA_GOV on X is the fastest channel but EXCLUDED (ToS). Scrape target; JS-render likely. | Task0(2026-06-23): unreachable from resolver env (ConnectionError: ('Connection aborted.', RemoteDisconnected('Remote end closed connection without response'))); verify from production network.
+    verified: "2026-06-23"
     status: needs_review
 
   - id: sa_mof
@@ -132,7 +130,7 @@ sources:
     institution: "Ministry of Finance (Saudi Arabia)"
     tier: 0
     origin_class: [fiscal]
-    fetch_type: unverified
+    fetch_type: scrape
     url: "https://www.mof.gov.sa/en/mediacenter/news/Pages/default.aspx"
     feed_url: null
     probe_paths: ["/ar/mediacenter/news/Pages/default.aspx", "/sitemap.xml", "/rss"]
@@ -141,8 +139,8 @@ sources:
     ownership: state
     state_alignment: SA
     reliability: high
-    notes: "Budget, debt issuance, fiscal policy. Arabic-first; EN mirror."
-    verified: "2026-06-22"
+    notes: "Budget, debt issuance, fiscal policy. Arabic-first; EN mirror. | Task0(2026-06-23): no feed; served HTML JS-rendered/thin (article-links~39); selector needs headless capture."
+    verified: "2026-06-23"
     status: needs_review
 
   - id: sa_pif
@@ -152,7 +150,7 @@ sources:
     institution: "Public Investment Fund (PIF)"
     tier: 0
     origin_class: [investment]
-    fetch_type: unverified
+    fetch_type: scrape
     url: "https://www.pif.gov.sa/en/news-and-insights/"
     feed_url: null
     probe_paths: ["/ar/news-and-insights/", "/sitemap.xml", "/feed", "/rss"]
@@ -161,11 +159,9 @@ sources:
     ownership: state
     state_alignment: SA
     reliability: high
-    notes: >
-      Sovereign wealth fund — cross-border M&A/strategic-investment events that
-      do NOT appear in any in-country financial feed. EN-primary site. High
-      geoeconomic salience (deployments across MENA + globally).
-    verified: "2026-06-22"
+    notes: >-
+      Sovereign wealth fund — cross-border M&A/strategic-investment events that do NOT appear in any in-country financial feed. EN-primary site. High geoeconomic salience (deployments across MENA + globally). | Task0(2026-06-23): no feed; served HTML JS-rendered/thin (article-links~29); selector needs headless capture.
+    verified: "2026-06-23"
     status: needs_review
 
   - id: sa_tadawul
@@ -175,7 +171,7 @@ sources:
     institution: "Saudi Exchange (Tadawul)"
     tier: 0
     origin_class: [investment, macro]
-    fetch_type: unverified
+    fetch_type: scrape
     url: "https://www.saudiexchange.sa/wps/portal/saudiexchange/newsandreports/news"
     feed_url: null
     probe_paths: ["/sitemap.xml", "/rss", "/feed"]
@@ -184,8 +180,8 @@ sources:
     ownership: state_linked
     state_alignment: SA
     reliability: high
-    notes: "Listings, disclosures, market-moving filings. Arabic-first; EN mirror."
-    verified: "2026-06-22"
+    notes: "Listings, disclosures, market-moving filings. Arabic-first; EN mirror. | Task0(2026-06-23): origin 403 to bots; no feed. Needs authenticated/headless review."
+    verified: "2026-06-23"
     status: needs_review
 
   # ---------------------------------------------------------------------- UAE
@@ -196,7 +192,7 @@ sources:
     institution: "Central Bank of the UAE (CBUAE)"
     tier: 0
     origin_class: [monetary, macro]
-    fetch_type: unverified
+    fetch_type: scrape
     url: "https://www.centralbank.ae/en/news-and-publications/news-and-insights/"
     feed_url: null
     probe_paths: ["/ar/news-and-publications/news-and-insights/", "/sitemap.xml", "/rss", "/feed"]
@@ -205,10 +201,9 @@ sources:
     ownership: state
     state_alignment: AE
     reliability: high
-    notes: >
-      VERIFIED JS-rendered portal, no obvious first-party RSS. Arabic + strong EN
-      mirror. Scrape target; needs headless render for selector.
-    verified: "2026-06-22"
+    notes: >-
+      VERIFIED JS-rendered portal, no obvious first-party RSS. Arabic + strong EN mirror. Scrape target; needs headless render for selector. | Task0(2026-06-23): origin 403 to bots; no feed. Needs authenticated/headless review.
+    verified: "2026-06-23"
     status: needs_review
 
   - id: ae_mof
@@ -218,18 +213,18 @@ sources:
     institution: "Ministry of Finance (UAE)"
     tier: 0
     origin_class: [fiscal]
-    fetch_type: unverified
+    fetch_type: rss
     url: "https://mof.gov.ae/en/media-center/news/"
-    feed_url: null
-    probe_paths: ["/ar/media-center/news/", "/sitemap.xml", "/rss"]
+    feed_url: https://mof.gov.ae/en/feed/
+    probe_paths: []
     extract_hint: null
     lang: ar
     ownership: state
     state_alignment: AE
     reliability: high
-    notes: "Federal fiscal policy. Note: Abu Dhabi/Dubai also have emirate-level bodies."
-    verified: "2026-06-22"
-    status: needs_review
+    notes: "Federal fiscal policy. Note: Abu Dhabi/Dubai also have emirate-level bodies. | Task0(2026-06-23): RSS/Atom feed found and validated (>=1 entry)."
+    verified: "2026-06-23"
+    status: live
 
   - id: ae_adia
     country: AE
@@ -238,7 +233,7 @@ sources:
     institution: "Abu Dhabi Investment Authority (ADIA) / Mubadala / ADQ"
     tier: 0
     origin_class: [investment]
-    fetch_type: unverified
+    fetch_type: scrape
     url: "https://www.mubadala.com/en/news"
     feed_url: null
     probe_paths: ["/sitemap.xml", "/feed", "/rss"]
@@ -247,11 +242,9 @@ sources:
     ownership: state
     state_alignment: AE
     reliability: high
-    notes: >
-      Mubadala is the most press-active of the Abu Dhabi SWFs (ADIA is opaque).
-      Cross-border strategic investment. EN-primary. Consider separate ADQ entry
-      in expansion pass.
-    verified: "2026-06-22"
+    notes: >-
+      Mubadala is the most press-active of the Abu Dhabi SWFs (ADIA is opaque). Cross-border strategic investment. EN-primary. Consider separate ADQ entry in expansion pass. | Task0(2026-06-23): origin 403 to bots; no feed. Needs authenticated/headless review.
+    verified: "2026-06-23"
     status: needs_review
 
   - id: ae_adx_dfm
@@ -261,7 +254,7 @@ sources:
     institution: "Abu Dhabi Securities Exchange (ADX) / Dubai Financial Market (DFM)"
     tier: 0
     origin_class: [investment, macro]
-    fetch_type: unverified
+    fetch_type: scrape
     url: "https://www.adx.ae/english/pages/news/default.aspx"
     feed_url: null
     probe_paths: ["/sitemap.xml", "/rss", "/feed"]
@@ -270,8 +263,8 @@ sources:
     ownership: state_linked
     state_alignment: AE
     reliability: high
-    notes: "Two exchanges; ADX listed as primary. DFM may warrant its own entry."
-    verified: "2026-06-22"
+    notes: "Two exchanges; ADX listed as primary. DFM may warrant its own entry. | Task0(2026-06-23): no feed; served HTML JS-rendered/thin (article-links~1); selector needs headless capture."
+    verified: "2026-06-23"
     status: needs_review
 
   # ---------------------------------------------------------------------- EGYPT
@@ -284,7 +277,7 @@ sources:
     institution: "Central Bank of Egypt (CBE)"
     tier: 0
     origin_class: [monetary, macro]
-    fetch_type: unverified
+    fetch_type: scrape
     url: "https://www.cbe.org.eg/en/news-publications/news"
     feed_url: null
     probe_paths: ["/ar/news-publications/news", "/sitemap.xml", "/rss", "/feed"]
@@ -293,10 +286,9 @@ sources:
     ownership: state
     state_alignment: EG
     reliability: high
-    notes: >
-      HIGH-SALIENCE: EGP devaluations, IMF-program rate moves are core daily
-      events. Arabic-first; EN mirror. Egypt dual-buckets ME + NA.
-    verified: "2026-06-22"
+    notes: >-
+      HIGH-SALIENCE: EGP devaluations, IMF-program rate moves are core daily events. Arabic-first; EN mirror. Egypt dual-buckets ME + NA. | Task0(2026-06-23): no feed; served HTML JS-rendered/thin (article-links~0); selector needs headless capture.
+    verified: "2026-06-23"
     status: needs_review
 
   - id: eg_mof
@@ -306,7 +298,7 @@ sources:
     institution: "Ministry of Finance (Egypt)"
     tier: 0
     origin_class: [fiscal]
-    fetch_type: unverified
+    fetch_type: scrape
     url: "https://www.mof.gov.eg/en/posts/news"
     feed_url: null
     probe_paths: ["/ar/posts/news", "/sitemap.xml", "/rss"]
@@ -315,8 +307,8 @@ sources:
     ownership: state
     state_alignment: EG
     reliability: high
-    notes: "Debt, budget, IMF-linked fiscal measures. Arabic-first."
-    verified: "2026-06-22"
+    notes: "Debt, budget, IMF-linked fiscal measures. Arabic-first. | Task0(2026-06-23): no feed; served HTML JS-rendered/thin (article-links~0); selector needs headless capture."
+    verified: "2026-06-23"
     status: needs_review
 
   # ---------------------------------------------------------------------- TURKEY
@@ -327,7 +319,7 @@ sources:
     institution: "Central Bank of the Republic of Türkiye (TCMB)"
     tier: 0
     origin_class: [monetary, macro]
-    fetch_type: unverified
+    fetch_type: scrape
     url: "https://www.tcmb.gov.tr/wps/wcm/connect/en/tcmb+en/main+menu/announcements"
     feed_url: null
     probe_paths: ["/wps/wcm/connect/tr/tcmb+tr", "/sitemap.xml", "/rss", "/feed"]
@@ -336,11 +328,9 @@ sources:
     ownership: state
     state_alignment: TR
     reliability: high
-    notes: >
-      FIPS=TU (not TR) — easy bucketing bug. HIGH-SALIENCE: rate decisions, lira.
-      WEAK-LANGUAGE pair: Turkish primary; ensure a strong-lang corroborator
-      (Reuters TR desk / AA English) clusters with it. Strong EN mirror exists.
-    verified: "2026-06-22"
+    notes: >-
+      FIPS=TU (not TR) — easy bucketing bug. HIGH-SALIENCE: rate decisions, lira. WEAK-LANGUAGE pair: Turkish primary; ensure a strong-lang corroborator (Reuters TR desk / AA English) clusters with it. Strong EN mirror exists. | Task0(2026-06-23): no feed; served HTML JS-rendered/thin (article-links~3); selector needs headless capture.
+    verified: "2026-06-23"
     status: needs_review
 
   - id: tr_mof_hmb
@@ -350,7 +340,7 @@ sources:
     institution: "Ministry of Treasury and Finance (Türkiye)"
     tier: 0
     origin_class: [fiscal, macro]
-    fetch_type: unverified
+    fetch_type: scrape
     url: "https://www.hmb.gov.tr/duyurular"
     feed_url: null
     probe_paths: ["/en/announcements", "/sitemap.xml", "/rss"]
@@ -359,8 +349,8 @@ sources:
     ownership: state
     state_alignment: TR
     reliability: high
-    notes: "Treasury + finance merged. Turkish-first; EN mirror partial."
-    verified: "2026-06-22"
+    notes: "Treasury + finance merged. Turkish-first; EN mirror partial. | Task0(2026-06-23): no feed; served HTML JS-rendered/thin (article-links~0); selector needs headless capture."
+    verified: "2026-06-23"
     status: needs_review
 
   # ---------------------------------------------------------------------- ISRAEL
@@ -371,7 +361,7 @@ sources:
     institution: "Bank of Israel (BOI)"
     tier: 0
     origin_class: [monetary, macro]
-    fetch_type: unverified
+    fetch_type: scrape
     url: "https://www.boi.org.il/en/communication-and-publications/press-releases/"
     feed_url: null
     probe_paths: ["/he/communication-and-publications/press-releases/", "/rss", "/feed", "/sitemap.xml"]
@@ -380,10 +370,9 @@ sources:
     ownership: state
     state_alignment: IL
     reliability: high
-    notes: >
-      FIPS=IS. Hebrew primary; EXCELLENT EN mirror (BOI publishes EN promptly —
-      English may be acceptable here as primary). Model handles he reasonably.
-    verified: "2026-06-22"
+    notes: >-
+      FIPS=IS. Hebrew primary; EXCELLENT EN mirror (BOI publishes EN promptly — English may be acceptable here as primary). Model handles he reasonably. | Task0(2026-06-23): no feed; served HTML JS-rendered/thin (article-links~0); selector needs headless capture.
+    verified: "2026-06-23"
     status: needs_review
 
   - id: il_mof
@@ -393,7 +382,7 @@ sources:
     institution: "Ministry of Finance (Israel)"
     tier: 0
     origin_class: [fiscal]
-    fetch_type: unverified
+    fetch_type: scrape
     url: "https://www.gov.il/en/departments/ministry_of_finance/govil-landing-page"
     feed_url: null
     probe_paths: ["/he/departments/ministry_of_finance", "/api/", "/rss", "/sitemap.xml"]
@@ -402,8 +391,8 @@ sources:
     ownership: state
     state_alignment: IL
     reliability: high
-    notes: "On gov.il unified platform — may expose a JSON API (probe /api/)."
-    verified: "2026-06-22"
+    notes: "On gov.il unified platform — may expose a JSON API (probe /api/). | Task0(2026-06-23): origin 403 to bots; no feed. Needs authenticated/headless review."
+    verified: "2026-06-23"
     status: needs_review
 
   - id: il_tase
@@ -413,7 +402,7 @@ sources:
     institution: "Tel Aviv Stock Exchange (TASE)"
     tier: 0
     origin_class: [investment, macro]
-    fetch_type: unverified
+    fetch_type: scrape
     url: "https://www.tase.co.il/en/market_data/news"
     feed_url: null
     probe_paths: ["/he/market_data/news", "/api/", "/rss"]
@@ -422,8 +411,8 @@ sources:
     ownership: private
     state_alignment: IL
     reliability: high
-    notes: "Demutualized exchange. Strong EN. Likely has an API (probe)."
-    verified: "2026-06-22"
+    notes: "Demutualized exchange. Strong EN. Likely has an API (probe). | Task0(2026-06-23): origin 403 to bots; no feed. Needs authenticated/headless review."
+    verified: "2026-06-23"
     status: needs_review
 
   # ---------------------------------------------------------------------- QATAR
@@ -434,7 +423,7 @@ sources:
     institution: "Qatar Central Bank (QCB)"
     tier: 0
     origin_class: [monetary, macro]
-    fetch_type: unverified
+    fetch_type: scrape
     url: "https://www.qcb.gov.qa/en/news/"
     feed_url: null
     probe_paths: ["/ar/news/", "/sitemap.xml", "/rss", "/feed"]
@@ -443,8 +432,8 @@ sources:
     ownership: state
     state_alignment: QA
     reliability: high
-    notes: "Arabic-first; EN mirror. QIA (SWF) is near-opaque — no reliable feed."
-    verified: "2026-06-22"
+    notes: "Arabic-first; EN mirror. QIA (SWF) is near-opaque — no reliable feed. | Task0(2026-06-23): unreachable from resolver env (SSLError: HTTPSConnectionPool(host='www.qcb.gov.qa', port=443): Max retries exceeded with url: /en/news/ (Caused by SSLError(SSLCertVerificationError(1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1010)')))); verify from production network."
+    verified: "2026-06-23"
     status: needs_review
 
   - id: qa_qia
@@ -454,7 +443,7 @@ sources:
     institution: "Qatar Investment Authority (QIA)"
     tier: 0
     origin_class: [investment]
-    fetch_type: unverified
+    fetch_type: scrape
     url: "https://www.qia.qa/en/News/Pages/default.aspx"
     feed_url: null
     probe_paths: ["/sitemap.xml", "/rss"]
@@ -463,10 +452,9 @@ sources:
     ownership: state
     state_alignment: QA
     reliability: degraded
-    notes: >
-      Opaque SWF, rare press releases. Most QIA deals break via wires, not the
-      QIA site — DEGRADED; lean on wire tier for QIA-deal events.
-    verified: "2026-06-22"
+    notes: >-
+      Opaque SWF, rare press releases. Most QIA deals break via wires, not the QIA site — DEGRADED; lean on wire tier for QIA-deal events. | Task0(2026-06-23): origin 404 — registry URL likely stale; needs updated news-section path.
+    verified: "2026-06-23"
     status: needs_review
 
   # ---------------------------------------------------------------------- KUWAIT
@@ -477,7 +465,7 @@ sources:
     institution: "Central Bank of Kuwait (CBK)"
     tier: 0
     origin_class: [monetary, macro]
-    fetch_type: unverified
+    fetch_type: scrape
     url: "https://www.cbk.gov.kw/en/cbk-news/announcements-and-press-releases"
     feed_url: null
     probe_paths: ["/ar/cbk-news/announcements-and-press-releases", "/sitemap.xml", "/rss"]
@@ -486,8 +474,8 @@ sources:
     ownership: state
     state_alignment: KW
     reliability: high
-    notes: "FIPS=KU. Arabic-first; EN mirror. KIA (SWF) opaque — wire-covered."
-    verified: "2026-06-22"
+    notes: "FIPS=KU. Arabic-first; EN mirror. KIA (SWF) opaque — wire-covered. | Task0(2026-06-23): origin 404 — registry URL likely stale; needs updated news-section path."
+    verified: "2026-06-23"
     status: needs_review
 
   - id: kw_mof
@@ -497,7 +485,7 @@ sources:
     institution: "Ministry of Finance (Kuwait)"
     tier: 0
     origin_class: [fiscal]
-    fetch_type: unverified
+    fetch_type: scrape
     url: "https://www.mof.gov.kw/MOFNews/index.aspx"
     feed_url: null
     probe_paths: ["/sitemap.xml", "/rss"]
@@ -506,8 +494,8 @@ sources:
     ownership: state
     state_alignment: KW
     reliability: degraded
-    notes: "Budget, deficit-finance debate. Site dated; Arabic-first; scrape."
-    verified: "2026-06-22"
+    notes: "Budget, deficit-finance debate. Site dated; Arabic-first; scrape. | Task0(2026-06-23): unreachable from resolver env (ConnectTimeout: HTTPSConnectionPool(host='www.mof.gov.kw', port=443): Max retries exceeded with url: /MOFNews/index.aspx (Caused by ConnectTimeoutError(<HTTPSConnection(host='www.mof.gov.kw', port=443) at 0x107076510>, 'Connection to www.mof.gov.kw timed out. (connect timeout=10)'))); verify from production network."
+    verified: "2026-06-23"
     status: needs_review
 
   # ---------------------------------------------------------------------- IRAN
@@ -518,7 +506,7 @@ sources:
     institution: "Central Bank of the Islamic Republic of Iran (CBI)"
     tier: 0
     origin_class: [monetary, macro]
-    fetch_type: unverified
+    fetch_type: scrape
     url: "https://www.cbi.ir/default_en.aspx"
     feed_url: null
     probe_paths: ["/default.aspx", "/rss", "/sitemap.xml"]
@@ -527,12 +515,9 @@ sources:
     ownership: state
     state_alignment: IR
     reliability: intermittent
-    notes: >
-      WEAK-LANGUAGE + SANCTIONS-DEGRADED. Farsi primary; model fa competence
-      thin. Site intermittently reachable from outside IR. MANDATORY strong-lang
-      pairing — cluster with Reuters/Al Jazeera/Al-Monitor IR coverage so every
-      Iran event has an en/ar witness. Do NOT rely on CBI alone.
-    verified: "2026-06-22"
+    notes: >-
+      WEAK-LANGUAGE + SANCTIONS-DEGRADED. Farsi primary; model fa competence thin. Site intermittently reachable from outside IR. MANDATORY strong-lang pairing — cluster with Reuters/Al Jazeera/Al-Monitor IR coverage so every Iran event has an en/ar witness. Do NOT rely on CBI alone. | Task0(2026-06-23): no feed; served HTML JS-rendered/thin (article-links~0); selector needs headless capture.
+    verified: "2026-06-23"
     status: needs_review
 
   # ---------------------------------------------------------------------- IRAQ
@@ -543,7 +528,7 @@ sources:
     institution: "Central Bank of Iraq (CBI)"
     tier: 0
     origin_class: [monetary, macro]
-    fetch_type: unverified
+    fetch_type: scrape
     url: "https://cbi.iq/news"
     feed_url: null
     probe_paths: ["/news?lang=en", "/rss", "/sitemap.xml"]
@@ -552,10 +537,9 @@ sources:
     ownership: state
     state_alignment: IQ
     reliability: degraded
-    notes: >
-      FIPS=IZ. Dinar auctions, USD-flow controls = high geoeconomic salience.
-      Arabic-first; EN partial. Pair with wire tier (Rudaw/Reuters Baghdad).
-    verified: "2026-06-22"
+    notes: >-
+      FIPS=IZ. Dinar auctions, USD-flow controls = high geoeconomic salience. Arabic-first; EN partial. Pair with wire tier (Rudaw/Reuters Baghdad). | Task0(2026-06-23): no feed; served HTML JS-rendered/thin (article-links~110); selector needs headless capture.
+    verified: "2026-06-23"
     status: needs_review
 
   # ----------------------------------------------- CORE LATAM: BRAZIL
@@ -566,7 +550,7 @@ sources:
     institution: "Banco Central do Brasil (BCB)"
     tier: 0
     origin_class: [monetary, macro]
-    fetch_type: unverified
+    fetch_type: scrape
     url: "https://www.bcb.gov.br/en/pressdetail"
     feed_url: null
     probe_paths: ["/api/", "/rss", "/feed", "/sitemap.xml", "/pt-br/#!/home"]
@@ -575,10 +559,9 @@ sources:
     ownership: state
     state_alignment: BR
     reliability: high
-    notes: >
-      HIGH-SALIENCE: Selic decisions, FX intervention. Portuguese-first; strong
-      EN. BCB historically exposes a JSON/OData API — PROBE /api/ first.
-    verified: "2026-06-22"
+    notes: >-
+      HIGH-SALIENCE: Selic decisions, FX intervention. Portuguese-first; strong EN. BCB historically exposes a JSON/OData API — PROBE /api/ first. | Task0(2026-06-23): no feed; served HTML JS-rendered/thin (article-links~0); selector needs headless capture.
+    verified: "2026-06-23"
     status: needs_review
 
   - id: br_mof_fazenda
@@ -588,20 +571,19 @@ sources:
     institution: "Ministério da Fazenda (Brazil)"
     tier: 0
     origin_class: [fiscal, macro]
-    fetch_type: unverified
+    fetch_type: rss
     url: "https://www.gov.br/fazenda/pt-br/assuntos/noticias"
-    feed_url: null
-    probe_paths: ["/noticias/feed", "/rss", "/sitemap.xml"]
+    feed_url: https://www.gov.br/rss.xml
+    probe_paths: []
     extract_hint: null
     lang: pt
     ownership: state
     state_alignment: BR
     reliability: high
-    notes: >
-      On gov.br (Plone-based) — Plone sites OFTEN expose RSS at .../noticias/feed
-      or @@rss. PROBE that first; good chance of a clean feed here.
-    verified: "2026-06-22"
-    status: needs_review
+    notes: >-
+      On gov.br (Plone-based) — Plone sites OFTEN expose RSS at .../noticias/feed or @@rss. PROBE that first; good chance of a clean feed here. | Task0(2026-06-23): RSS/Atom feed found and validated (>=1 entry). Portal-root feed (broad) — refine to a section feed later; gate does precision.
+    verified: "2026-06-23"
+    status: live
 
   - id: br_b3
     country: BR
@@ -610,7 +592,7 @@ sources:
     institution: "B3 (Brazil Stock Exchange)"
     tier: 0
     origin_class: [investment, macro]
-    fetch_type: unverified
+    fetch_type: scrape
     url: "https://www.b3.com.br/en_us/news/"
     feed_url: null
     probe_paths: ["/pt_br/noticias/", "/rss", "/sitemap.xml"]
@@ -619,8 +601,8 @@ sources:
     ownership: private
     state_alignment: null
     reliability: high
-    notes: "Private exchange. Portuguese-first; EN mirror."
-    verified: "2026-06-22"
+    notes: "Private exchange. Portuguese-first; EN mirror. | Task0(2026-06-23): no feed; served HTML JS-rendered/thin (article-links~2); selector needs headless capture."
+    verified: "2026-06-23"
     status: needs_review
 
   # ----------------------------------------------- CORE LATAM: MEXICO
@@ -631,7 +613,7 @@ sources:
     institution: "Banco de México (Banxico)"
     tier: 0
     origin_class: [monetary, macro]
-    fetch_type: unverified
+    fetch_type: scrape
     url: "https://www.banxico.org.mx/publicaciones-y-prensa/comunicados-de-prensa/index.html"
     feed_url: null
     probe_paths: ["/SieAPIRest/", "/rss", "/sitemap.xml"]
@@ -640,10 +622,9 @@ sources:
     ownership: state
     state_alignment: MX
     reliability: high
-    notes: >
-      Spanish-first; strong EN. Banxico has a well-documented data API
-      (SIE API) — PROBE for a press/comunicados endpoint.
-    verified: "2026-06-22"
+    notes: >-
+      Spanish-first; strong EN. Banxico has a well-documented data API (SIE API) — PROBE for a press/comunicados endpoint. | Task0(2026-06-23): origin 404 — registry URL likely stale; needs updated news-section path.
+    verified: "2026-06-23"
     status: needs_review
 
   - id: mx_shcp
@@ -653,7 +634,7 @@ sources:
     institution: "Secretaría de Hacienda y Crédito Público (SHCP)"
     tier: 0
     origin_class: [fiscal, macro]
-    fetch_type: unverified
+    fetch_type: scrape
     url: "https://www.gob.mx/hacienda/prensa"
     feed_url: null
     probe_paths: ["/hacienda/articulos/feed", "/rss", "/sitemap.xml"]
@@ -662,8 +643,8 @@ sources:
     ownership: state
     state_alignment: MX
     reliability: high
-    notes: "On gob.mx unified platform. Spanish-first. Probe for platform-wide feed."
-    verified: "2026-06-22"
+    notes: "On gob.mx unified platform. Spanish-first. Probe for platform-wide feed. | Task0(2026-06-23): origin 404 — registry URL likely stale; needs updated news-section path."
+    verified: "2026-06-23"
     status: needs_review
 
   # ----------------------------------------------- CORE LATAM: ARGENTINA
@@ -674,7 +655,7 @@ sources:
     institution: "Banco Central de la República Argentina (BCRA)"
     tier: 0
     origin_class: [monetary, macro]
-    fetch_type: unverified
+    fetch_type: scrape
     url: "https://www.bcra.gob.ar/Noticias/Noticias.asp"
     feed_url: null
     probe_paths: ["/rss", "/sitemap.xml", "/Noticias/principales-variables.asp"]
@@ -683,10 +664,9 @@ sources:
     ownership: state
     state_alignment: AR
     reliability: high
-    notes: >
-      VERY HIGH-SALIENCE: peso, reserves, capital controls, IMF program. The
-      single most event-dense LatAm primary. Spanish-only; weak/no EN mirror.
-    verified: "2026-06-22"
+    notes: >-
+      VERY HIGH-SALIENCE: peso, reserves, capital controls, IMF program. The single most event-dense LatAm primary. Spanish-only; weak/no EN mirror. | Task0(2026-06-23): origin 404 — registry URL likely stale; needs updated news-section path.
+    verified: "2026-06-23"
     status: needs_review
 
   - id: ar_economia
@@ -696,18 +676,18 @@ sources:
     institution: "Ministerio de Economía (Argentina)"
     tier: 0
     origin_class: [fiscal, macro, trade]
-    fetch_type: unverified
+    fetch_type: rss
     url: "https://www.argentina.gob.ar/economia/noticias"
-    feed_url: null
-    probe_paths: ["/economia/noticias/feed", "/rss", "/sitemap.xml"]
+    feed_url: https://www.argentina.gob.ar/rss.xml
+    probe_paths: []
     extract_hint: null
     lang: es
     ownership: state
     state_alignment: AR
     reliability: high
-    notes: "Consolidated economy ministry. Spanish-only. argentina.gob.ar platform."
-    verified: "2026-06-22"
-    status: needs_review
+    notes: "Consolidated economy ministry. Spanish-only. argentina.gob.ar platform. | Task0(2026-06-23): RSS/Atom feed found and validated (>=1 entry). Portal-root feed (broad) — refine to a section feed later; gate does precision."
+    verified: "2026-06-23"
+    status: live
 
   # ----------------------------------------------- CORE LATAM: CHILE
   - id: cl_cb_bcch
@@ -717,7 +697,7 @@ sources:
     institution: "Banco Central de Chile (BCCh)"
     tier: 0
     origin_class: [monetary, macro]
-    fetch_type: unverified
+    fetch_type: scrape
     url: "https://www.bcentral.cl/en/areas/communications/press-releases"
     feed_url: null
     probe_paths: ["/areas/comunicaciones/comunicados-de-prensa", "/rss", "/sitemap.xml", "/api/"]
@@ -726,10 +706,9 @@ sources:
     ownership: state
     state_alignment: CL
     reliability: high
-    notes: >
-      FIPS=CI (collides intuitively with Côte d'Ivoire — keep FIPS discipline).
-      Copper-driven economy = commodity geoeconomics. Spanish-first; strong EN.
-    verified: "2026-06-22"
+    notes: >-
+      FIPS=CI (collides intuitively with Côte d'Ivoire — keep FIPS discipline). Copper-driven economy = commodity geoeconomics. Spanish-first; strong EN. | Task0(2026-06-23): no feed; served HTML JS-rendered/thin (article-links~0); selector needs headless capture.
+    verified: "2026-06-23"
     status: needs_review
 
   # ----------------------------------------------- CORE LATAM: COLOMBIA
@@ -740,18 +719,18 @@ sources:
     institution: "Banco de la República (Colombia)"
     tier: 0
     origin_class: [monetary, macro]
-    fetch_type: unverified
+    fetch_type: rss
     url: "https://www.banrep.gov.co/en/news"
-    feed_url: null
-    probe_paths: ["/es/noticias", "/rss", "/sitemap.xml"]
+    feed_url: https://www.banrep.gov.co/es/rss.xml
+    probe_paths: []
     extract_hint: null
     lang: es
     ownership: state
     state_alignment: CO
     reliability: high
-    notes: "Spanish-first; EN mirror. Coffee/oil/coal commodity exposure."
-    verified: "2026-06-22"
-    status: needs_review
+    notes: "Spanish-first; EN mirror. Coffee/oil/coal commodity exposure. | Task0(2026-06-23): RSS/Atom feed found and validated (>=1 entry)."
+    verified: "2026-06-23"
+    status: live
 
   # ----------------------------------------------- CORE LATAM: GUYANA (oil anomaly)
   - id: gy_bog
@@ -761,7 +740,7 @@ sources:
     institution: "Bank of Guyana"
     tier: 0
     origin_class: [monetary, macro, energy]
-    fetch_type: unverified
+    fetch_type: scrape
     url: "https://www.bankofguyana.org.gy/bog/news"
     feed_url: null
     probe_paths: ["/rss", "/sitemap.xml"]
@@ -770,12 +749,9 @@ sources:
     ownership: state
     state_alignment: GY
     reliability: degraded
-    notes: >
-      ANOMALY: fastest-growing economy on earth (ExxonMobil offshore oil) — punches
-      far above size on the geoeconomic beat. EN-native. Small institution, thin
-      web presence (DEGRADED) — the OIL story breaks via Exxon filings + wires, so
-      pair heavily with energy-actor + wire tiers, not the central bank alone.
-    verified: "2026-06-22"
+    notes: >-
+      ANOMALY: fastest-growing economy on earth (ExxonMobil offshore oil) — punches far above size on the geoeconomic beat. EN-native. Small institution, thin web presence (DEGRADED) — the OIL story breaks via Exxon filings + wires, so pair heavily with energy-actor + wire tiers, not the central bank alone. | Task0(2026-06-23): origin 404 — registry URL likely stale; needs updated news-section path.
+    verified: "2026-06-23"
     status: needs_review
 
 # =============================================================================
@@ -794,7 +770,7 @@ sources:
     institution: "Associated Press"
     tier: 1
     origin_class: [macro, trade, energy, fiscal, monetary, investment, sanctions]
-    fetch_type: unverified
+    fetch_type: scrape
     url: "https://apnews.com/hub/economy"
     feed_url: null
     probe_paths: ["/rss", "/index.rss", "/hub/economy/feed"]
@@ -803,8 +779,8 @@ sources:
     ownership: private
     state_alignment: null
     reliability: high
-    notes: "Cleanest surviving first-party wire RSS. Recall floor anchor."
-    verified: "2026-06-22"
+    notes: "Cleanest surviving first-party wire RSS. Recall floor anchor. | Task0(2026-06-23): no feed; served HTML JS-rendered/thin (article-links~429); selector needs headless capture."
+    verified: "2026-06-23"
     status: needs_review
 
   - id: wire_reuters_world
@@ -814,7 +790,7 @@ sources:
     institution: "Reuters (World / Markets / regional desks)"
     tier: 1
     origin_class: [macro, trade, energy, fiscal, monetary, investment, sanctions]
-    fetch_type: unverified
+    fetch_type: scrape
     url: "https://www.reuters.com/markets/"
     feed_url: null
     probe_paths: ["/rssfeed/", "/tools/rss", "/arc/outboundfeeds/rss/"]
@@ -823,11 +799,9 @@ sources:
     ownership: private
     state_alignment: null
     reliability: degraded
-    notes: >
-      DEGRADED first-party RSS. Probe arc outbound feeds. If no first-party feed,
-      Reuters coverage still arrives via GDELT firehose — do NOT scrape behind
-      paywall. Critical strong-lang corroborator for Iran/Turkey events.
-    verified: "2026-06-22"
+    notes: >-
+      DEGRADED first-party RSS. Probe arc outbound feeds. If no first-party feed, Reuters coverage still arrives via GDELT firehose — do NOT scrape behind paywall. Critical strong-lang corroborator for Iran/Turkey events. | Task0(2026-06-23): robots.txt disallows our UA — scraping not permitted; feed-of-links/manual only (ToS).
+    verified: "2026-06-23"
     status: needs_review
 
   - id: wire_aa_anadolu
@@ -837,21 +811,19 @@ sources:
     institution: "Anadolu Agency (AA)"
     tier: 1
     origin_class: [macro, trade, energy, fiscal, monetary, sanctions]
-    fetch_type: unverified
+    fetch_type: rss
     url: "https://www.aa.com.tr/en/economy"
-    feed_url: null
-    probe_paths: ["/en/rss/default?cat=economy", "/rss", "/en/rss"]
+    feed_url: https://www.aa.com.tr/tr/rss/default?cat=ekonomi
+    probe_paths: []
     extract_hint: null
     lang: en
     ownership: state
     state_alignment: TR
     reliability: high
-    notes: >
-      Turkish state wire — STATE_ALIGNMENT=TR (carries Turkish framing; NOT an
-      independent witness to Turkey-Syria-Gulf stories). Strong-lang corroborator
-      for Turkey events. Known to publish real RSS (probe cat=economy). Multilang.
-    verified: "2026-06-22"
-    status: needs_review
+    notes: >-
+      Turkish state wire — STATE_ALIGNMENT=TR (carries Turkish framing; NOT an independent witness to Turkey-Syria-Gulf stories). Strong-lang corroborator for Turkey events. Known to publish real RSS (probe cat=economy). Multilang. | Task0(2026-06-23): RSS feed validated (rss20, 30 entries). Native-first: Turkish economy feed.
+    verified: "2026-06-23"
+    status: live
 
   - id: wire_efe
     country: null
@@ -860,7 +832,7 @@ sources:
     institution: "Agencia EFE (LatAm desks)"
     tier: 1
     origin_class: [macro, trade, energy, fiscal, monetary, investment]
-    fetch_type: unverified
+    fetch_type: scrape
     url: "https://efe.com/economia/"
     feed_url: null
     probe_paths: ["/economia/feed/", "/rss", "/feed"]
@@ -869,11 +841,9 @@ sources:
     ownership: state_linked
     state_alignment: ES
     reliability: high
-    notes: >
-      Spanish wire with deep LatAm coverage — Spanish-native recall floor for the
-      latam bucket. state_alignment=ES (Spanish gov-linked) — minor; mostly
-      neutral on LatAm-internal economics.
-    verified: "2026-06-22"
+    notes: >-
+      Spanish wire with deep LatAm coverage — Spanish-native recall floor for the latam bucket. state_alignment=ES (Spanish gov-linked) — minor; mostly neutral on LatAm-internal economics. | Task0(2026-06-23): no feed; served HTML JS-rendered/thin (article-links~0); selector needs headless capture.
+    verified: "2026-06-23"
     status: needs_review
 
   - id: wire_bloomberg_linea
@@ -883,18 +853,18 @@ sources:
     institution: "Bloomberg Línea (LatAm)"
     tier: 1
     origin_class: [macro, monetary, investment, energy]
-    fetch_type: unverified
+    fetch_type: rss
     url: "https://www.bloomberglinea.com/"
-    feed_url: null
-    probe_paths: ["/feed/", "/rss", "/arc/outboundfeeds/rss/"]
+    feed_url: https://www.bloomberglinea.com/arc/outboundfeeds/rss.xml
+    probe_paths: []
     extract_hint: null
     lang: es
     ownership: private
     state_alignment: null
     reliability: high
-    notes: "Bloomberg's Spanish/Portuguese LatAm arm — more open than bloomberg.com."
-    verified: "2026-06-22"
-    status: needs_review
+    notes: "Bloomberg's Spanish/Portuguese LatAm arm — more open than bloomberg.com. | Task0(2026-06-23): RSS/Atom feed found and validated (>=1 entry)."
+    verified: "2026-06-23"
+    status: live
 
 # =============================================================================
 # TIER 2 — REGIONAL / NATIONAL OUTLETS  (coverage + texture; BIAS-FLAGGED)
@@ -910,21 +880,19 @@ sources:
     institution: "Al Jazeera (Arabic — Economy)"
     tier: 2
     origin_class: [macro, trade, energy, fiscal, monetary, sanctions, investment]
-    fetch_type: unverified
+    fetch_type: rss
     url: "https://www.aljazeera.net/economy/"
-    feed_url: null
-    probe_paths: ["/xml/rss/all.xml", "/rss", "/feed"]
+    feed_url: https://www.aljazeera.net/aljazeerarss/a7c186be-1baa-4bd4-9d80-a84db769f779/73d0e1b4-532f-45ef-b135-bfdff8b8cab9
+    probe_paths: []
     extract_hint: null
     lang: ar
     ownership: state_linked
     state_alignment: QA
     reliability: high
-    notes: >
-      Qatari-funded — STATE_ALIGNMENT=QA. Arabic desk (deeper than English).
-      Strong on Gulf, Levant, sanctions framing. NOT independent of Qatar-aligned
-      sources. Known historic RSS at /xml/rss/all.xml (probe).
-    verified: "2026-06-22"
-    status: needs_review
+    notes: >-
+      Qatari-funded — STATE_ALIGNMENT=QA. Arabic desk (deeper than English). Strong on Gulf, Levant, sanctions framing. NOT independent of Qatar-aligned sources. Known historic RSS at /xml/rss/all.xml (probe). | Task0(2026-06-23): RSS/Atom feed found and validated (>=1 entry).
+    verified: "2026-06-23"
+    status: live
 
   - id: reg_alarabiya_ar
     country: null
@@ -933,7 +901,7 @@ sources:
     institution: "Al Arabiya (Arabic — Aswaq/Economy)"
     tier: 2
     origin_class: [macro, trade, energy, fiscal, monetary, investment]
-    fetch_type: unverified
+    fetch_type: scrape
     url: "https://www.alarabiya.net/aswaq"
     feed_url: null
     probe_paths: ["/.mrss.xml", "/feed/rss2/ar/aswaq.xml", "/rss"]
@@ -942,11 +910,9 @@ sources:
     ownership: state_linked
     state_alignment: SA
     reliability: high
-    notes: >
-      Saudi-owned — STATE_ALIGNMENT=SA. The deliberate counterweight to AJ's QA
-      framing: pairing AJ(QA)+AlArabiya(SA) on a Gulf story is GOOD corroboration
-      hygiene (different alignments). Arabic desk. JS-heavy; probe RSS.
-    verified: "2026-06-22"
+    notes: >-
+      Saudi-owned — STATE_ALIGNMENT=SA. The deliberate counterweight to AJ's QA framing: pairing AJ(QA)+AlArabiya(SA) on a Gulf story is GOOD corroboration hygiene (different alignments). Arabic desk. JS-heavy; probe RSS. | Task0(2026-06-23): origin 403 to bots; no feed. Needs authenticated/headless review.
+    verified: "2026-06-23"
     status: needs_review
 
   - id: reg_almonitor
@@ -956,20 +922,19 @@ sources:
     institution: "Al-Monitor"
     tier: 2
     origin_class: [macro, energy, sanctions, trade, investment]
-    fetch_type: unverified
+    fetch_type: rss
     url: "https://www.al-monitor.com/contents/economy"
-    feed_url: null
-    probe_paths: ["/rss", "/feed", "/rss.xml"]
+    feed_url: https://www.al-monitor.com/rss
+    probe_paths: []
     extract_hint: null
     lang: en
     ownership: private
     state_alignment: null
     reliability: high
-    notes: >
-      EN analytical coverage of MENA incl. Iran economy — useful strong-lang
-      corroborator for the fa weak-language gap. Relatively independent.
-    verified: "2026-06-22"
-    status: needs_review
+    notes: >-
+      EN analytical coverage of MENA incl. Iran economy — useful strong-lang corroborator for the fa weak-language gap. Relatively independent. | Task0(2026-06-23): RSS/Atom feed found and validated (>=1 entry). Portal-root feed (broad) — refine to a section feed later; gate does precision.
+    verified: "2026-06-23"
+    status: live
 
   - id: reg_valor_br
     country: BR
@@ -978,18 +943,18 @@ sources:
     institution: "Valor Econômico (Brazil)"
     tier: 2
     origin_class: [macro, monetary, fiscal, investment, trade, energy]
-    fetch_type: unverified
+    fetch_type: rss
     url: "https://valor.globo.com/"
-    feed_url: null
-    probe_paths: ["/rss/", "/feed/", "/rss/feed/"]
+    feed_url: https://valor.globo.com/rss/valor
+    probe_paths: []
     extract_hint: null
     lang: pt
     ownership: private
     state_alignment: null
     reliability: high
-    notes: "Brazil's leading business daily. Portuguese. Some content paywalled."
-    verified: "2026-06-22"
-    status: needs_review
+    notes: "Brazil's leading business daily. Portuguese. Some content paywalled. | Task0(2026-06-23): RSS/Atom feed found and validated (>=1 entry)."
+    verified: "2026-06-23"
+    status: live
 
   - id: reg_americaeconomia
     country: null
@@ -998,7 +963,7 @@ sources:
     institution: "AméricaEconomía"
     tier: 2
     origin_class: [macro, trade, investment, energy, monetary]
-    fetch_type: unverified
+    fetch_type: scrape
     url: "https://www.americaeconomia.com/"
     feed_url: null
     probe_paths: ["/rss.xml", "/feed", "/rss"]
@@ -1007,8 +972,8 @@ sources:
     ownership: private
     state_alignment: null
     reliability: high
-    notes: "Pan-LatAm business coverage — region-scoped, fills cross-border gaps."
-    verified: "2026-06-22"
+    notes: "Pan-LatAm business coverage — region-scoped, fills cross-border gaps. | Task0(2026-06-23): unreachable from resolver env (ReadTimeout: HTTPSConnectionPool(host='www.americaeconomia.com', port=443): Read timed out. (read timeout=10)); verify from production network."
+    verified: "2026-06-23"
     status: needs_review
 
 # =============================================================================
@@ -1028,22 +993,19 @@ sources:
     institution: "US Treasury OFAC (sanctions actions)"
     tier: 0
     origin_class: [sanctions]
-    fetch_type: unverified
+    fetch_type: rss
     url: "https://ofac.treasury.gov/recent-actions"
-    feed_url: null
-    probe_paths: ["/recent-actions/feed", "/system/files/...", "/rss"]
+    feed_url: https://ofac.treasury.gov/rss.xml
+    probe_paths: []
     extract_hint: null
     lang: en
     ownership: foreign_gov
     state_alignment: US
     reliability: high
-    notes: >
-      ACTOR-KEYED. Sanctions on Iran/Syria/Venezuela/etc. are datelined DC — gate
-      must map to the AFFECTED country's bucket (Change 5). OFAC publishes
-      structured recent-actions; probe for feed/JSON. PRIMARY: the designation
-      IS the event.
-    verified: "2026-06-22"
-    status: needs_review
+    notes: >-
+      ACTOR-KEYED. Sanctions on Iran/Syria/Venezuela/etc. are datelined DC — gate must map to the AFFECTED country's bucket (Change 5). OFAC publishes structured recent-actions; probe for feed/JSON. PRIMARY: the designation IS the event. | Task0(2026-06-23): RSS feed validated (rss20, 10 entries); confirmed by direct re-check.
+    verified: "2026-06-23"
+    status: live
 
   - id: actor_us_treasury_press
     country: null
@@ -1052,18 +1014,18 @@ sources:
     institution: "US Treasury (press releases)"
     tier: 0
     origin_class: [sanctions, fiscal, trade]
-    fetch_type: unverified
+    fetch_type: rss
     url: "https://home.treasury.gov/news/press-releases"
-    feed_url: null
-    probe_paths: ["/news/press-releases/feed", "/rss.xml", "/rss"]
+    feed_url: https://home.treasury.gov/rss.xml
+    probe_paths: []
     extract_hint: null
     lang: en
     ownership: foreign_gov
     state_alignment: US
     reliability: high
-    notes: "Broader than OFAC: tariffs, bilateral finance. Actor-keyed."
-    verified: "2026-06-22"
-    status: needs_review
+    notes: "Broader than OFAC: tariffs, bilateral finance. Actor-keyed. | Task0(2026-06-23): RSS/Atom feed found and validated (>=1 entry). Portal-root feed (broad) — refine to a section feed later; gate does precision."
+    verified: "2026-06-23"
+    status: live
 
   - id: actor_eu_sanctions
     country: null
@@ -1072,7 +1034,7 @@ sources:
     institution: "EU Council (restrictive measures / sanctions)"
     tier: 0
     origin_class: [sanctions, trade]
-    fetch_type: unverified
+    fetch_type: scrape
     url: "https://www.consilium.europa.eu/en/policies/sanctions/"
     feed_url: null
     probe_paths: ["/en/press/press-releases/?format=rss", "/rss", "/feed"]
@@ -1081,8 +1043,8 @@ sources:
     ownership: multilateral
     state_alignment: EU
     reliability: high
-    notes: "Actor-keyed. EU measures on Syria/Russia-linked-MENA trade etc."
-    verified: "2026-06-22"
+    notes: "Actor-keyed. EU measures on Syria/Russia-linked-MENA trade etc. | Task0(2026-06-23): no feed; served HTML JS-rendered/thin (article-links~8); selector needs headless capture."
+    verified: "2026-06-23"
     status: needs_review
 
   - id: actor_imf
@@ -1092,7 +1054,7 @@ sources:
     institution: "IMF (press releases / country programs)"
     tier: 0
     origin_class: [macro, fiscal, monetary]
-    fetch_type: unverified
+    fetch_type: scrape
     url: "https://www.imf.org/en/News"
     feed_url: null
     probe_paths: ["/external/rss/feeds.aspx", "/en/News/rss", "/rss"]
@@ -1101,11 +1063,9 @@ sources:
     ownership: multilateral
     state_alignment: null
     reliability: high
-    notes: >
-      ACTOR-KEYED, very high salience: program agreements/reviews for Egypt,
-      Argentina, Pakistan-adjacent, etc. ARE the geoeconomic event. IMF has a
-      long-standing RSS hub (probe external/rss). PRIMARY for program news.
-    verified: "2026-06-22"
+    notes: >-
+      ACTOR-KEYED, very high salience: program agreements/reviews for Egypt, Argentina, Pakistan-adjacent, etc. ARE the geoeconomic event. IMF has a long-standing RSS hub (probe external/rss). PRIMARY for program news. | Task0(2026-06-23): no feed; served HTML JS-rendered/thin (article-links~26); selector needs headless capture.
+    verified: "2026-06-23"
     status: needs_review
 
   - id: actor_worldbank
@@ -1115,7 +1075,7 @@ sources:
     institution: "World Bank (news / country)"
     tier: 0
     origin_class: [macro, fiscal, trade]
-    fetch_type: unverified
+    fetch_type: scrape
     url: "https://www.worldbank.org/en/news"
     feed_url: null
     probe_paths: ["/en/news/all?format=rss", "/rss", "/feed"]
@@ -1124,8 +1084,8 @@ sources:
     ownership: multilateral
     state_alignment: null
     reliability: high
-    notes: "Actor-keyed. Lending, country diagnostics. Probe for RSS hub."
-    verified: "2026-06-22"
+    notes: "Actor-keyed. Lending, country diagnostics. Probe for RSS hub. | Task0(2026-06-23): no feed; served HTML JS-rendered/thin (article-links~9); selector needs headless capture."
+    verified: "2026-06-23"
     status: needs_review
 
   - id: actor_opec
@@ -1135,7 +1095,7 @@ sources:
     institution: "OPEC (press releases)"
     tier: 0
     origin_class: [energy]
-    fetch_type: unverified
+    fetch_type: scrape
     url: "https://www.opec.org/opec_web/en/press_room/28.htm"
     feed_url: null
     probe_paths: ["/opec_web/en/press_room/rss.xml", "/rss", "/feed"]
@@ -1144,11 +1104,9 @@ sources:
     ownership: multilateral
     state_alignment: null
     reliability: high
-    notes: >
-      ACTOR-KEYED, energy. Quota decisions move every Gulf + Iraq + LatAm-oil
-      economy at once — one OPEC event maps to MANY buckets. The gate/cluster
-      must allow multi-country attribution for these (note for Change 5).
-    verified: "2026-06-22"
+    notes: >-
+      ACTOR-KEYED, energy. Quota decisions move every Gulf + Iraq + LatAm-oil economy at once — one OPEC event maps to MANY buckets. The gate/cluster must allow multi-country attribution for these (note for Change 5). | Task0(2026-06-23): no feed; served HTML JS-rendered/thin (article-links~2); selector needs headless capture.
+    verified: "2026-06-23"
     status: needs_review
 
   - id: actor_china_mofcom
@@ -1158,7 +1116,7 @@ sources:
     institution: "China MOFCOM / Exim (BRI, trade, lending)"
     tier: 1
     origin_class: [trade, investment, energy]
-    fetch_type: unverified
+    fetch_type: scrape
     url: "http://english.mofcom.gov.cn/"
     feed_url: null
     probe_paths: ["/rss", "/feed", "/article/newsrelease/"]
@@ -1167,10 +1125,7 @@ sources:
     ownership: foreign_gov
     state_alignment: CN
     reliability: degraded
-    notes: >
-      ACTOR-KEYED. China BRI/port/lithium/lending events in MENA+LatAm — the
-      defining geoeconomics of the decade, invisible to in-country financial
-      feeds. state_alignment=CN (carries Chinese framing). EN mirror partial/
-      DEGRADED; pair with wire corroboration. Consider AIIB/CDB in expansion.
-    verified: "2026-06-22"
+    notes: >-
+      ACTOR-KEYED. China BRI/port/lithium/lending events in MENA+LatAm — the defining geoeconomics of the decade, invisible to in-country financial feeds. state_alignment=CN (carries Chinese framing). EN mirror partial/ DEGRADED; pair with wire corroboration. Consider AIIB/CDB in expansion. | Task0(2026-06-23): no feed; served HTML JS-rendered/thin (article-links~20); selector needs headless capture.
+    verified: "2026-06-23"
     status: needs_review

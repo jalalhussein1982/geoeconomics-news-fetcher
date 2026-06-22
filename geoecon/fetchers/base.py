@@ -35,6 +35,9 @@ def get_fetcher(source) -> Fetcher:
     if ft == "scrape":
         from .scrape import ScrapeFetcher
         return ScrapeFetcher()
+    if ft == "sitemap":
+        from .sitemap import SitemapFetcher
+        return SitemapFetcher()
     if ft == "api":
         from .api import ApiFetcher
         return ApiFetcher()

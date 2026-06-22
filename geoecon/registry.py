@@ -16,7 +16,7 @@ import yaml
 
 log = logging.getLogger("geoecon.registry")
 
-VALID_FETCH_TYPES = {"rss", "api", "scrape", "dead", "unverified"}
+VALID_FETCH_TYPES = {"rss", "api", "scrape", "sitemap", "dead", "unverified"}
 VALID_TIERS = {0, 1, 2}
 
 # fetch_types that cannot be fetched yet — skipped at runtime by the stage.

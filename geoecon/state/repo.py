@@ -113,15 +113,16 @@ class Repo:
     def insert_cluster(self, run_id, event_fingerprint, region, languages, article_count,
                        framing_divergent=False, country_fips=None, gate_score=None,
                        tier_min=None, has_primary=None, distinct_state_alignments=None,
-                       source_count=None) -> int:
+                       source_count=None, corroboration_score=None) -> int:
         return self.conn.execute(
             """INSERT INTO clusters(run_id, event_fingerprint, region, country_fips,
                  languages, article_count, framing_divergent, gate_score,
-                 tier_min, has_primary, distinct_state_alignments, source_count)
-               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING cluster_id""",
+                 tier_min, has_primary, distinct_state_alignments, source_count,
+                 corroboration_score)
+               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING cluster_id""",
             (run_id, event_fingerprint, region, country_fips, languages, article_count,
              framing_divergent, gate_score, tier_min, has_primary, distinct_state_alignments,
-             source_count)).fetchone()[0]
+             source_count, corroboration_score)).fetchone()[0]
 
     def add_membership(self, cluster_id, article_id, frame_label=None):
         self.conn.execute(
@@ -190,19 +191,23 @@ class Repo:
                 quality_flag="ok", is_headline_only=r[12]))
         return out
 
-    def records_for_buckets(self, run_id) -> list[tuple[SynthesisRecord, str | None, list[dict], float | None]]:
-        """OK records with their cluster country_fips, verified source link(s), and gate score.
+    def records_for_buckets(self, run_id, rank_by_corroboration=False
+                            ) -> list[tuple[SynthesisRecord, str | None, list[dict], float | None]]:
+        """OK records with their cluster country_fips, verified source link(s), and the
+        RANKING score (4th element).
 
-        Returns [(SynthesisRecord, country_fips, [{"url","domain"}, ...], gate_score), ...],
-        one tuple per record. Source links come from articles.source_url (verified
-        GDELT URLs), NOT the LLM 'sources' field. gate_score is the cluster-level
-        geoeconomic relevance score (float or None).
+        Returns [(SynthesisRecord, country_fips, [{"url","domain"}, ...], rank_score), ...].
+        Source links come from articles.source_url (verified URLs), NOT the LLM 'sources'
+        field. The ranking score is `gate_score` by default; when rank_by_corroboration is
+        on (Change 4, ships OFF) it is `corroboration_score` instead — the only behavioural
+        switch, so callers and tuple shape are unchanged.
         """
         rows = self.conn.execute(
             """SELECT s.record_id, s.cluster_id, s.headline_en, s.headline_original,
                  s.headline_original_lang, s.what_happened_en, s.geoeconomic_significance_en,
                  s.geoeconomic_vector, s.entities, s.key_figures, s.framing_divergence,
-                 s.sources, s.is_headline_only, c.country_fips, c.gate_score, a.source_url, a.domain
+                 s.sources, s.is_headline_only, c.country_fips, c.gate_score, a.source_url,
+                 a.domain, c.corroboration_score
                FROM synthesis_records s
                JOIN clusters c ON c.cluster_id = s.cluster_id
                LEFT JOIN cluster_articles ca ON ca.cluster_id = c.cluster_id
@@ -222,7 +227,8 @@ class Repo:
                             "entities": r[8], "key_figures": r[9], "framing_divergence": r[10],
                             "sources": r[11]},
                     quality_flag="ok", is_headline_only=r[12])
-                by_id[rec_id] = [rec, r[13], [], r[14]]
+                rank_score = r[17] if rank_by_corroboration else r[14]
+                by_id[rec_id] = [rec, r[13], [], rank_score]
                 order.append(rec_id)
             if r[15]:  # source_url present
                 src = {"url": r[15], "domain": r[16]}

@@ -26,7 +26,7 @@ def _client(answer):
 class _Repo:
     def __init__(self, tuples):
         self._tuples = tuples; self.saved = []
-    def records_for_buckets(self, rid):
+    def records_for_buckets(self, rid, rank_by_corroboration=False):
         return self._tuples
     def upsert_region_summary(self, rid, bucket, lede, takeaways, model, count):
         self.saved.append((bucket, lede, takeaways, count))
@@ -34,10 +34,27 @@ class _Repo:
 
 _CFG = type("C", (), {"synthesis_model": "deepseek-v3.2", "synthesis_prompt_id": "x",
                       "buckets": ("middle_east", "north_africa", "latam"),
-                      "region_cap": 10})()
+                      "region_cap": 10, "rank_by_corroboration": False})()
 
 
 GOOD = '{"lede":"Gulf capital rotates east.","takeaways":["PIF shifts $15B.","UAE-Turkey swap widens."]}'
+
+
+def test_ranking_flag_threaded_to_repo():
+    # Change 4: the corroboration ranking switch reaches the repo. Dormant by default,
+    # active when cfg.rank_by_corroboration is on.
+    class SpyRepo(_Repo):
+        def __init__(self, tuples): super().__init__(tuples); self.flag = None
+        def records_for_buckets(self, rid, rank_by_corroboration=False):
+            self.flag = rank_by_corroboration; return self._tuples
+    tuples = [(_rec(1, "Egypt FX move"), "EG", [], 0.5)]
+    off = SpyRepo(tuples); summary.run(_CFG, off, 1, _client(GOOD), prompt='SYS {REGION}')
+    assert off.flag is False
+    cfg_on = type("C", (), {**{k: getattr(_CFG, k) for k in
+                  ("synthesis_model", "synthesis_prompt_id", "buckets", "region_cap")},
+                  "rank_by_corroboration": True})()
+    on = SpyRepo(tuples); summary.run(cfg_on, on, 1, _client(GOOD), prompt='SYS {REGION}')
+    assert on.flag is True
 
 
 def test_groups_by_bucket_and_skips_empty():
@@ -77,11 +94,11 @@ def test_summary_caps_per_region():
     recs = [(_rec(i, f"H{i}"), "BR", [], s) for i, s in [(1, 0.9), (2, 0.8), (3, 0.1)]]
     class Repo:
         def __init__(self): self.saved = []
-        def records_for_buckets(self, rid): return recs
+        def records_for_buckets(self, rid, rank_by_corroboration=False): return recs
         def upsert_region_summary(self, rid, bucket, lede, takeaways, model, count):
             self.saved.append((bucket, count))
     cfg = type("C", (), {"synthesis_model": "m", "buckets": ("middle_east","north_africa","latam"),
-                         "region_cap": 2})()
+                         "region_cap": 2, "rank_by_corroboration": False})()
     repo = Repo()
     client = _client(GOOD)
     summary.run(cfg, repo, 1, client, prompt="SYS {REGION}")

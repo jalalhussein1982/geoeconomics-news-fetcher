@@ -19,13 +19,14 @@ class FakeRepo:
     def insert_cluster(self, run_id, fp, region, langs, count,
                        framing_divergent=False, country_fips=None, gate_score=None,
                        tier_min=None, has_primary=None, distinct_state_alignments=None,
-                       source_count=None):
+                       source_count=None, corroboration_score=None):
         cid = len(self.clusters) + 1
         self.clusters.append(dict(cid=cid, count=count, country_fips=country_fips,
                                   gate_score=gate_score, tier_min=tier_min,
                                   has_primary=has_primary,
                                   distinct_state_alignments=distinct_state_alignments,
-                                  source_count=source_count)); return cid
+                                  source_count=source_count,
+                                  corroboration_score=corroboration_score)); return cid
     def add_membership(self, cid, aid, frame_label=None):
         self.memberships.append((cid, aid))
 
@@ -78,6 +79,7 @@ def test_run_aggregates_default_for_gdelt_only_cluster():
     c = repo.clusters[0]
     assert c["tier_min"] is None and c["has_primary"] is False
     assert c["distinct_state_alignments"] == 0 and c["source_count"] == 1
+    assert c["corroboration_score"] is not None  # scored from the (degraded) aggregates
 
 
 def test_run_falls_back_to_lexical_on_llm_failure():

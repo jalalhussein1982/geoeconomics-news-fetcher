@@ -40,7 +40,7 @@ def render_html(records, *, mode="en_only", date_str, summary=None,
 def run(cfg, repo, run_id, date_str, *, stats=None) -> dict:
     from .. import regions
     grouped = regions.top_per_bucket(
-        repo.records_for_buckets(run_id), country_of=lambda t: t[1],
+        repo.records_for_buckets(run_id, cfg.rank_by_corroboration), country_of=lambda t: t[1],
         score_of=lambda t: t[3] or 0.0, n=cfg.region_cap, active=cfg.buckets)
     os.makedirs(cfg.archive_dir, exist_ok=True)
     newsletters = []

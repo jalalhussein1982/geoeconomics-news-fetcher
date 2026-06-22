@@ -138,6 +138,7 @@ CREATE TABLE clusters (
     has_primary               BOOLEAN,                 -- any Tier-0 primary present
     distinct_state_alignments INTEGER,                 -- count of distinct state_alignments
     source_count              INTEGER,                 -- member article count
+    corroboration_score       REAL,                    -- Change 4: scored from the aggregates above
     languages           TEXT[],                        -- distinct source langs in the cluster
     -- framing-divergence flag set by Stage 2 when intra-cluster framing diverges
     framing_divergent   BOOLEAN NOT NULL DEFAULT false,

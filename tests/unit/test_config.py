@@ -36,6 +36,11 @@ _ENV = {
 }
 
 
+def test_rank_by_corroboration_defaults_off_and_flips():
+    assert Config.from_env(dict(_ENV)).rank_by_corroboration is False
+    assert Config.from_env({**_ENV, "RANK_BY_CORROBORATION": "true"}).rank_by_corroboration is True
+
+
 def test_buckets_default_is_three_regions():
     cfg = Config.from_env(dict(_ENV))
     assert cfg.buckets == ("middle_east", "north_africa", "latam")

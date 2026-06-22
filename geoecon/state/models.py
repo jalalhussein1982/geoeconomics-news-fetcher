@@ -45,6 +45,7 @@ class Cluster:
     has_primary: bool | None = None
     distinct_state_alignments: int | None = None
     source_count: int | None = None
+    corroboration_score: float | None = None
 
 @dataclass
 class SynthesisRecord:

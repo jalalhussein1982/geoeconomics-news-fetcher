@@ -1,6 +1,6 @@
 from __future__ import annotations
 import hashlib, json, logging, re
-from .. import regions
+from .. import corroboration, regions
 
 log = logging.getLogger("geoecon.cluster")
 
@@ -137,16 +137,21 @@ def run(cfg, repo, run_id: int, client) -> dict:
         primary = max(member_arts, key=lambda a: a.gate_score or 0.0)
         langs = sorted({a.source_lang for a in member_arts if a.source_lang})
         fp = fingerprint(primary.title, primary.source_url)
-        # Provenance aggregates over members (Change 2): populated, not yet used
-        # for ranking. None of this changes the primary, which stays max gate_score.
+        # Provenance aggregates over members (Change 2). The primary is unchanged
+        # (max gate_score). corroboration_score (Change 4) is scored from these and
+        # persisted, but only used for ranking when cfg.rank_by_corroboration is on.
         tiers = [a.source_tier for a in member_arts if a.source_tier is not None]
+        tier_min = min(tiers) if tiers else None
+        has_primary = any(a.source_tier == 0 for a in member_arts)
+        distinct_alignments = len({a.state_alignment for a in member_arts if a.state_alignment})
         cid = repo.insert_cluster(
             run_id, fp, primary.region, langs, len(member_arts),
             country_fips=primary.country_fips, gate_score=primary.gate_score,
-            tier_min=min(tiers) if tiers else None,
-            has_primary=any(a.source_tier == 0 for a in member_arts),
-            distinct_state_alignments=len({a.state_alignment for a in member_arts if a.state_alignment}),
-            source_count=len(member_arts),
+            tier_min=tier_min, has_primary=has_primary,
+            distinct_state_alignments=distinct_alignments, source_count=len(member_arts),
+            corroboration_score=corroboration.score(
+                tier_min=tier_min, has_primary=has_primary,
+                distinct_state_alignments=distinct_alignments, source_count=len(member_arts)),
         )
         for a in member_arts:
             repo.add_membership(cid, a.article_id)

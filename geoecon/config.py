@@ -35,6 +35,9 @@ class Config:
     sources_path: str | None = None  # registry path; None => registry.default_path()
     send_heartbeat: bool = True
     dry_run: bool = False
+    # Change 4: rank summary/render by corroboration_score instead of gate_score.
+    # Ships OFF — flip only after reviewing a real before/after brief diff in a live env.
+    rank_by_corroboration: bool = False
     limit: int | None = None
 
     @classmethod
@@ -70,5 +73,6 @@ class Config:
             sources_path=env.get("SOURCES_PATH") or None,
             send_heartbeat=env.get("SEND_HEARTBEAT", "true").lower() == "true",
             dry_run=env.get("DRY_RUN", "false").lower() == "true",
+            rank_by_corroboration=env.get("RANK_BY_CORROBORATION", "false").lower() == "true",
             limit=int(limit) if limit else None,
         )

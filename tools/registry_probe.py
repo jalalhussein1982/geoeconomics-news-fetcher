@@ -27,8 +27,11 @@ from pathlib import Path
 from urllib.parse import urljoin, urlsplit
 from urllib.robotparser import RobotFileParser
 
+import re
+
 import feedparser
 import requests
+from lxml import etree
 from lxml import html as lxml_html
 
 REPO = Path(__file__).resolve().parent.parent
@@ -129,6 +132,92 @@ def find_feed(src) -> str | None:
     return None
 
 
+_NEWS = ("news", "press", "article", "noticia", "comunicado", "media", "release",
+         "duyuru", "haber", "akhbar", "basin", "insight", "publication")
+
+
+def _xml_locs_lastmods(content: bytes):
+    """Return (locs, n_with_lastmod) for a <urlset>, or (None, 0) / ('INDEX', children)."""
+    try:
+        root = etree.fromstring(content)
+    except Exception:
+        return None, 0
+    tag = etree.QName(root).localname.lower()
+    if tag == "sitemapindex":
+        kids = [e.text for e in root.iter() if etree.QName(e).localname == "loc" and e.text]
+        return "INDEX", kids
+    if tag != "urlset":
+        return None, 0
+    locs, n_lastmod = [], 0
+    for ue in root:
+        if etree.QName(ue).localname.lower() != "url":
+            continue
+        loc = lastmod = None
+        for ch in ue:
+            ln = etree.QName(ch).localname.lower()
+            if ln == "loc":
+                loc = ch.text
+            elif ln == "lastmod":
+                lastmod = ch.text
+        if loc:
+            locs.append(loc)
+            if lastmod:
+                n_lastmod += 1
+    return locs, n_lastmod
+
+
+# Reject non-article sitemaps outright (their URLs pass no news filter anyway, but
+# their filename is a clear signal and they shouldn't even be followed).
+_BAD_SITEMAP = ("video", "image", "img", "product", "category", "tag-")
+
+
+def _sitemap_candidates(origin: str) -> list[str]:
+    cands = [urljoin(origin, p) for p in ("/sitemap.xml", "/sitemap_index.xml", "/sitemap-index.xml")]
+    rob, _ = get(urljoin(origin, "/robots.txt"))
+    if rob is not None and rob.status_code == 200:
+        for m in re.findall(r"(?i)^\s*sitemap:\s*(\S+)", rob.text, re.M):
+            cands.insert(0, m.strip())
+    seen, out = set(), []
+    for c in cands:
+        if c in seen or any(b in c.lower() for b in _BAD_SITEMAP):
+            continue
+        seen.add(c); out.append(c)
+    return out
+
+
+def find_sitemap(src) -> str | None:
+    """A sitemap is usable only if windowable (>=50% of <url> have <lastmod>) AND it
+    is genuinely article-bearing (news-like locs are >=25% AND >=5). The fraction
+    gate rejects navigation/product sitemaps (mostly non-article URLs) that a bare
+    count would wave through; otherwise discovery floods with site structure."""
+    for cand in _sitemap_candidates(origin_of(src.url)):
+        resp, _ = get(cand)
+        if resp is None or resp.status_code != 200:
+            continue
+        body = resp.content or b""
+        if b"<urlset" not in body[:600] and b"<sitemapindex" not in body[:600]:
+            continue
+        locs, n_lastmod = _xml_locs_lastmods(body)
+        if locs == "INDEX":
+            child = next((u for u in n_lastmod
+                          if any(k in u.lower() for k in _NEWS)
+                          and not any(b in u.lower() for b in _BAD_SITEMAP)), None)
+            if not child:
+                continue
+            rc, _ = get(child)
+            if rc is None or rc.status_code != 200:
+                continue
+            locs, n_lastmod = _xml_locs_lastmods(rc.content or b"")
+            if not isinstance(locs, list):
+                continue
+        if not locs:
+            continue
+        news = sum(1 for u in locs if any(k in u.lower() for k in _NEWS))
+        if n_lastmod / len(locs) >= 0.5 and news >= 5 and news / len(locs) >= 0.25:
+            return cand
+    return None
+
+
 def looks_js_shell(html: str) -> bool:
     low = html.lower()
     markers = ("window.__", "ng-app", "react", "__next", "__nuxt", "vue", "spa",
@@ -167,6 +256,13 @@ def classify(src) -> dict:
         if root:
             note += " Portal-root feed (broad) — refine to a section feed later; gate does precision."
         out.update(fetch_type="rss", feed_url=feed, status="live", clear_probe_paths=True, note=note)
+        return out
+
+    sm = find_sitemap(src)
+    if sm:
+        out.update(fetch_type="sitemap", feed_url=sm, status="live", clear_probe_paths=True,
+                   note="XML sitemap with <lastmod> found and windowable; article URLs discovered "
+                        "(titles via extraction).")
         return out
 
     resp, err = get(src.url)
@@ -222,15 +318,17 @@ def probe_all(sources, workers: int) -> list[dict]:
 
 
 def merge(prev: list[dict], cur: list[dict]) -> list[dict]:
-    """RSS feeds don't vanish: keep an earlier confirmed feed if this pass flaked."""
+    """Feeds/sitemaps don't vanish: keep an earlier confirmed live result (rss or
+    sitemap) if this pass flaked to needs_review."""
+    live = {"rss", "sitemap"}
     by_id = {r["id"]: r for r in prev}
     for r in cur:
         p = by_id.get(r["id"])
-        if r["fetch_type"] != "rss" and p and p.get("fetch_type") == "rss":
+        if r["fetch_type"] not in live and p and p.get("fetch_type") in live:
             note = p["note"]
             if "prior probe" not in note:
                 note += " (confirmed in a prior probe; flaked this run)"
-            r.update(fetch_type="rss", feed_url=p["feed_url"], status="live",
+            r.update(fetch_type=p["fetch_type"], feed_url=p["feed_url"], status="live",
                      clear_probe_paths=True, note=note)
     return cur
 

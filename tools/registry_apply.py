@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from collections import Counter, defaultdict
 from pathlib import Path
@@ -44,13 +45,14 @@ def apply_writeback(results: dict, date: str):
         entry["fetch_type"] = res["fetch_type"]
         entry["status"] = res["status"]
         entry["verified"] = date
-        if res["fetch_type"] in ("rss", "api") and res.get("feed_url"):
+        if res["fetch_type"] in ("rss", "api", "sitemap") and res.get("feed_url"):
             entry["feed_url"] = res["feed_url"]
             if res.get("clear_probe_paths"):
                 entry["probe_paths"] = []
         if res.get("extract_hint"):
             entry["extract_hint"] = res["extract_hint"]
-        prior = (entry.get("notes") or "").strip()
+        # strip any prior Task0(...) tag so re-resolution replaces it (no stacking)
+        prior = re.sub(r"\s*\|\s*Task0\(.*$", "", entry.get("notes") or "", flags=re.S).strip()
         tag = f"Task0({date}): {res['note']}"
         entry["notes"] = f"{prior} | {tag}" if prior else tag
 

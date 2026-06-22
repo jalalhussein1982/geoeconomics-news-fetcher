@@ -85,7 +85,7 @@ meta:
   schema_version: 1
   generated: "2026-06-22"
   librarian_verified: "2026-06-22"
-  mechanics_status: "RESOLVED via Task 0 on 2026-06-23 (live prober, robots-respecting): 11 rss/live, 37 scrape/needs_review, 0 dead. See sources.resolved.report.md."
+  mechanics_status: "RESOLVED via Task 0 on 2026-06-23 (live prober, robots-respecting): 11 rss, 34 scrape, 3 sitemap. See sources.resolved.report.md."
   buckets: [middle_east, north_africa, latam]
   notes: >
     Core-15 primaries + cross-cutting wire and external-actor tiers.
@@ -150,19 +150,19 @@ sources:
     institution: "Public Investment Fund (PIF)"
     tier: 0
     origin_class: [investment]
-    fetch_type: scrape
+    fetch_type: sitemap
     url: "https://www.pif.gov.sa/en/news-and-insights/"
-    feed_url: null
-    probe_paths: ["/ar/news-and-insights/", "/sitemap.xml", "/feed", "/rss"]
+    feed_url: https://www.pif.gov.sa/sitemap.xml
+    probe_paths: []
     extract_hint: null
     lang: en
     ownership: state
     state_alignment: SA
     reliability: high
     notes: >-
-      Sovereign wealth fund — cross-border M&A/strategic-investment events that do NOT appear in any in-country financial feed. EN-primary site. High geoeconomic salience (deployments across MENA + globally). | Task0(2026-06-23): no feed; served HTML JS-rendered/thin (article-links~29); selector needs headless capture.
+      Sovereign wealth fund — cross-border M&A/strategic-investment events that do NOT appear in any in-country financial feed. EN-primary site. High geoeconomic salience (deployments across MENA + globally). | Task0(2026-06-23): XML sitemap with <lastmod> found and windowable; article URLs discovered (titles via extraction).
     verified: "2026-06-23"
-    status: needs_review
+    status: live
 
   - id: sa_tadawul
     country: SA
@@ -361,19 +361,19 @@ sources:
     institution: "Bank of Israel (BOI)"
     tier: 0
     origin_class: [monetary, macro]
-    fetch_type: scrape
+    fetch_type: sitemap
     url: "https://www.boi.org.il/en/communication-and-publications/press-releases/"
-    feed_url: null
-    probe_paths: ["/he/communication-and-publications/press-releases/", "/rss", "/feed", "/sitemap.xml"]
+    feed_url: https://www.boi.org.il/sitemap.xml
+    probe_paths: []
     extract_hint: null
     lang: he
     ownership: state
     state_alignment: IL
     reliability: high
     notes: >-
-      FIPS=IS. Hebrew primary; EXCELLENT EN mirror (BOI publishes EN promptly — English may be acceptable here as primary). Model handles he reasonably. | Task0(2026-06-23): no feed; served HTML JS-rendered/thin (article-links~0); selector needs headless capture.
+      FIPS=IS. Hebrew primary; EXCELLENT EN mirror (BOI publishes EN promptly — English may be acceptable here as primary). Model handles he reasonably. | Task0(2026-06-23): XML sitemap with <lastmod> found and windowable; article URLs discovered (titles via extraction).
     verified: "2026-06-23"
-    status: needs_review
+    status: live
 
   - id: il_mof
     country: IL
@@ -402,18 +402,18 @@ sources:
     institution: "Tel Aviv Stock Exchange (TASE)"
     tier: 0
     origin_class: [investment, macro]
-    fetch_type: scrape
+    fetch_type: sitemap
     url: "https://www.tase.co.il/en/market_data/news"
-    feed_url: null
-    probe_paths: ["/he/market_data/news", "/api/", "/rss"]
+    feed_url: https://www.tase.co.il/sitemap.xml
+    probe_paths: []
     extract_hint: null
     lang: he
     ownership: private
     state_alignment: IL
     reliability: high
-    notes: "Demutualized exchange. Strong EN. Likely has an API (probe). | Task0(2026-06-23): origin 403 to bots; no feed. Needs authenticated/headless review."
+    notes: "Demutualized exchange. Strong EN. Likely has an API (probe). | Task0(2026-06-23): XML sitemap with <lastmod> found and windowable; article URLs discovered (titles via extraction)."
     verified: "2026-06-23"
-    status: needs_review
+    status: live
 
   # ---------------------------------------------------------------------- QATAR
   - id: qa_cb_qcb
@@ -494,7 +494,7 @@ sources:
     ownership: state
     state_alignment: KW
     reliability: degraded
-    notes: "Budget, deficit-finance debate. Site dated; Arabic-first; scrape. | Task0(2026-06-23): unreachable from resolver env (ConnectTimeout: HTTPSConnectionPool(host='www.mof.gov.kw', port=443): Max retries exceeded with url: /MOFNews/index.aspx (Caused by ConnectTimeoutError(<HTTPSConnection(host='www.mof.gov.kw', port=443) at 0x107076510>, 'Connection to www.mof.gov.kw timed out. (connect timeout=10)'))); verify from production network."
+    notes: "Budget, deficit-finance debate. Site dated; Arabic-first; scrape. | Task0(2026-06-23): unreachable from resolver env (ConnectTimeout: HTTPSConnectionPool(host='www.mof.gov.kw', port=443): Max retries exceeded with url: /MOFNews/index.aspx (Caused by ConnectTimeoutError(<HTTPSConnection(host='www.mof.gov.kw', port=443) at 0x106881fd0>, 'Connection to www.mof.gov.kw timed out. (connect timeout=10)'))); verify from production network."
     verified: "2026-06-23"
     status: needs_review
 
@@ -538,7 +538,7 @@ sources:
     state_alignment: IQ
     reliability: degraded
     notes: >-
-      FIPS=IZ. Dinar auctions, USD-flow controls = high geoeconomic salience. Arabic-first; EN partial. Pair with wire tier (Rudaw/Reuters Baghdad). | Task0(2026-06-23): no feed; served HTML JS-rendered/thin (article-links~110); selector needs headless capture.
+      FIPS=IZ. Dinar auctions, USD-flow controls = high geoeconomic salience. Arabic-first; EN partial. Pair with wire tier (Rudaw/Reuters Baghdad). | Task0(2026-06-23): no feed; served HTML JS-rendered/thin (article-links~109); selector needs headless capture.
     verified: "2026-06-23"
     status: needs_review
 
@@ -779,7 +779,7 @@ sources:
     ownership: private
     state_alignment: null
     reliability: high
-    notes: "Cleanest surviving first-party wire RSS. Recall floor anchor. | Task0(2026-06-23): no feed; served HTML JS-rendered/thin (article-links~429); selector needs headless capture."
+    notes: "Cleanest surviving first-party wire RSS. Recall floor anchor. | Task0(2026-06-23): manual hold: only sitemap is /hub/* section indexes (sports, regions), not articles — would discover navigation, not economy stories. Wire better via RSS/scrape; left for headless pass."
     verified: "2026-06-23"
     status: needs_review
 
@@ -813,7 +813,7 @@ sources:
     origin_class: [macro, trade, energy, fiscal, monetary, sanctions]
     fetch_type: rss
     url: "https://www.aa.com.tr/en/economy"
-    feed_url: https://www.aa.com.tr/tr/rss/default?cat=ekonomi
+    feed_url: https://www.aa.com.tr/tr/rss/default?cat=guncel
     probe_paths: []
     extract_hint: null
     lang: en
@@ -821,7 +821,7 @@ sources:
     state_alignment: TR
     reliability: high
     notes: >-
-      Turkish state wire — STATE_ALIGNMENT=TR (carries Turkish framing; NOT an independent witness to Turkey-Syria-Gulf stories). Strong-lang corroborator for Turkey events. Known to publish real RSS (probe cat=economy). Multilang. | Task0(2026-06-23): RSS feed validated (rss20, 30 entries). Native-first: Turkish economy feed.
+      Turkish state wire — STATE_ALIGNMENT=TR (carries Turkish framing; NOT an independent witness to Turkey-Syria-Gulf stories). Strong-lang corroborator for Turkey events. Known to publish real RSS (probe cat=economy). Multilang. | Task0(2026-06-23): RSS/Atom feed found and validated (>=1 entry).
     verified: "2026-06-23"
     status: live
 
@@ -1003,7 +1003,7 @@ sources:
     state_alignment: US
     reliability: high
     notes: >-
-      ACTOR-KEYED. Sanctions on Iran/Syria/Venezuela/etc. are datelined DC — gate must map to the AFFECTED country's bucket (Change 5). OFAC publishes structured recent-actions; probe for feed/JSON. PRIMARY: the designation IS the event. | Task0(2026-06-23): RSS feed validated (rss20, 10 entries); confirmed by direct re-check.
+      ACTOR-KEYED. Sanctions on Iran/Syria/Venezuela/etc. are datelined DC — gate must map to the AFFECTED country's bucket (Change 5). OFAC publishes structured recent-actions; probe for feed/JSON. PRIMARY: the designation IS the event. | Task0(2026-06-23): RSS/Atom feed found and validated (>=1 entry). Portal-root feed (broad) — refine to a section feed later; gate does precision.
     verified: "2026-06-23"
     status: live
 
@@ -1105,7 +1105,7 @@ sources:
     state_alignment: null
     reliability: high
     notes: >-
-      ACTOR-KEYED, energy. Quota decisions move every Gulf + Iraq + LatAm-oil economy at once — one OPEC event maps to MANY buckets. The gate/cluster must allow multi-country attribution for these (note for Change 5). | Task0(2026-06-23): no feed; served HTML JS-rendered/thin (article-links~2); selector needs headless capture.
+      ACTOR-KEYED, energy. Quota decisions move every Gulf + Iraq + LatAm-oil economy at once — one OPEC event maps to MANY buckets. The gate/cluster must allow multi-country attribution for these (note for Change 5). | Task0(2026-06-23): origin 403 to bots; no feed. Needs authenticated/headless review.
     verified: "2026-06-23"
     status: needs_review
 

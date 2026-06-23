@@ -90,6 +90,9 @@ def main(argv=None) -> int:
         log.info("pipeline done: %s", out)
         return 0
     except Exception:
+        # Log before exiting — a bare `return 1` made a CheckViolation in
+        # start_stage (outside the per-stage handler) a silent exit-1 with no trace.
+        log.exception("pipeline failed")
         return 1
 
 if __name__ == "__main__":

@@ -44,6 +44,20 @@ def test_stage_failure_marks_failed_and_stops():
         orchestrator.run_pipeline(_cfg(), repo, now=datetime(2026,6,19,5,tzinfo=timezone.utc), stages=stages)
     assert ("fail", "discovery") in repo.calls and repo.status == "failed"
 
+def test_default_stages_are_all_in_stage_runs_check():
+    # Guard: every orchestrator stage must be permitted by the stage_runs.stage_name
+    # CHECK constraint, or start_stage() raises a CheckViolation at runtime — and
+    # because start_stage is outside the per-stage try/except, that escapes as a
+    # silent exit 1. This is exactly how the discovery_registry stage broke the
+    # first live run; this test fails without a DB if a stage is ever missing.
+    import re, pathlib
+    schema = pathlib.Path("schema.sql").read_text()
+    m = re.search(r"stage_name\s+TEXT NOT NULL\s*CHECK \(stage_name IN\s*\((.*?)\)\)", schema, re.S)
+    allowed = set(re.findall(r"'([a-z_]+)'", m.group(1)))
+    names = {name for name, _ in orchestrator._default_stages(_cfg(), client=None)}
+    assert names <= allowed, f"stages missing from stage_runs CHECK: {names - allowed}"
+
+
 def test_default_stages_include_summary_in_order():
     from geoecon import orchestrator
     cfg = _cfg()

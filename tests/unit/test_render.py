@@ -57,3 +57,23 @@ def test_format_figures_spacing_and_dedup():
     assert "1.10%" in out and "%%" not in out
     assert "52,621.84 points" in out
     assert " · " in out                                # records joined with ` · ` separator
+
+
+def test_format_figures_caps_to_max():
+    figs = [{"value": str(i), "unit": ""} for i in range(1, 13)]  # 12 figures
+    out = render.format_figures(figs, max_figures=8)
+    assert len(out.split(" · ")) == 8
+
+
+def test_format_figures_numeric_dedupe_locale_and_currency():
+    figs = [{"value": "49.66%", "unit": "%"}, {"value": "49,66%", "unit": "%"},
+            {"value": "US$72", "unit": ""}, {"value": "72", "unit": "USD"}]
+    out = render.format_figures(figs)
+    assert len(out.split(" · ")) == 2  # one percent value, one currency value
+
+
+def test_format_figures_salience_orders_referenced_first():
+    figs = [{"value": "999", "unit": ""},   # not in prose -> ranked last
+            {"value": "42", "unit": ""}]     # appears in prose -> ranked first
+    out = render.format_figures(figs, context_text="growth hit 42 this year")
+    assert out == "42 · 999"

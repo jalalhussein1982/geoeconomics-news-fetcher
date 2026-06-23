@@ -109,3 +109,13 @@ def test_summary_caps_per_region():
     user_msg = latam_call[1][1]["content"]
     assert "HEADLINE: H1" in user_msg and "HEADLINE: H2" in user_msg
     assert "HEADLINE: H3" not in user_msg   # lowest-scoring record (0.1) dropped by the cap
+
+
+def test_summary_input_excludes_key_figures():
+    tuples = [(_rec(1, "Egypt FX move"), "EG", [], 0.5)]
+    repo = _Repo(tuples)
+    client = _client(GOOD)
+    summary.run(_CFG, repo, 1, client, prompt='SYS {REGION}')
+    user_msg = client.calls[0][1][1]["content"]
+    assert "KEY FIGURES" not in user_msg
+    assert "HEADLINE: Egypt FX move" in user_msg

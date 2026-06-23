@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 
-from .. import regions
+from .. import regions, ranking
 from .synth import parse_record
 
 log = logging.getLogger("geoecon.summary")
@@ -15,15 +15,10 @@ def build_summary_messages(prompt: str, region_display: str, records) -> list[di
     parts = []
     for rec in records:
         f = rec.fields
-        figs = "; ".join(
-            f"{k.get('value', '')}{k.get('unit', '') or ''} {k.get('gloss_en', '') or ''}".strip()
-            for k in (f.get("key_figures") or [])
-        )
         block = "\n".join(x for x in [
             f"HEADLINE: {f.get('headline_en', '')}",
             f"WHAT HAPPENED: {f.get('what_happened_en', '')}",
             f"SIGNIFICANCE: {f.get('geoeconomic_significance_en', '')}",
-            (f"KEY FIGURES: {figs}" if figs else ""),
         ] if x)
         parts.append(block)
     system = prompt.replace("{REGION}", region_display)
@@ -40,7 +35,7 @@ def run(cfg, repo, run_id, client, *, prompt: str | None = None) -> dict:
 
     grouped = regions.top_per_bucket(
         repo.records_for_buckets(run_id, cfg.rank_by_corroboration), country_of=lambda t: t[1],
-        score_of=lambda t: t[3] or 0.0, n=cfg.region_cap, active=cfg.buckets)
+        score_of=ranking.make_score_of(cfg), n=cfg.region_cap, active=cfg.buckets)
 
     counts = {"summaries_total": 0, "summaries_ok": 0, "summaries_empty": 0}
     for bucket in cfg.buckets:

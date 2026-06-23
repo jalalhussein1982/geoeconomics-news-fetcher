@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 
-from .. import regions
+from .. import regions, ranking
 from .synth import parse_record
 
 log = logging.getLogger("geoecon.summary")
@@ -35,7 +35,7 @@ def run(cfg, repo, run_id, client, *, prompt: str | None = None) -> dict:
 
     grouped = regions.top_per_bucket(
         repo.records_for_buckets(run_id, cfg.rank_by_corroboration), country_of=lambda t: t[1],
-        score_of=lambda t: t[3] or 0.0, n=cfg.region_cap, active=cfg.buckets)
+        score_of=ranking.make_score_of(cfg), n=cfg.region_cap, active=cfg.buckets)
 
     counts = {"summaries_total": 0, "summaries_ok": 0, "summaries_empty": 0}
     for bucket in cfg.buckets:

@@ -85,3 +85,15 @@ def test_dedup_model_default_and_override():
             "SMTP_PASSWORD": "p", "FROM_ADDR": "f", "RECIPIENTS": "r@x"}
     assert Config.from_env(base).dedup_model == "deepseek-v3.2"
     assert Config.from_env({**base, "DEDUP_MODEL": "kimi-k2.6"}).dedup_model == "kimi-k2.6"
+
+
+def test_output_quality_knob_defaults():
+    cfg = Config.from_env(dict(_ENV))
+    assert cfg.figures_max == 8
+    assert cfg.market_demote is True
+
+
+def test_output_quality_knob_overrides():
+    cfg = Config.from_env({**_ENV, "FIGURES_MAX": "5", "MARKET_DEMOTE": "false"})
+    assert cfg.figures_max == 5
+    assert cfg.market_demote is False

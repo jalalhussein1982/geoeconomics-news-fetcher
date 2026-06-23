@@ -38,6 +38,9 @@ class Config:
     # Change 4: rank summary/render by corroboration_score instead of gate_score.
     # Ships OFF — flip only after reviewing a real before/after brief diff in a live env.
     rank_by_corroboration: bool = False
+    # Output-quality knobs (2026-06-23 refinement). Both reversible via env.
+    figures_max: int = 8          # FIGURES_MAX; cap per-story figures line (0 => no cap)
+    market_demote: bool = True    # MARKET_DEMOTE; rank US/global market roundups last
     limit: int | None = None
 
     @classmethod
@@ -74,5 +77,7 @@ class Config:
             send_heartbeat=env.get("SEND_HEARTBEAT", "true").lower() == "true",
             dry_run=env.get("DRY_RUN", "false").lower() == "true",
             rank_by_corroboration=env.get("RANK_BY_CORROBORATION", "false").lower() == "true",
+            figures_max=int(env.get("FIGURES_MAX", "8")),
+            market_demote=env.get("MARKET_DEMOTE", "true").lower() == "true",
             limit=int(limit) if limit else None,
         )

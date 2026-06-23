@@ -8,10 +8,14 @@ parsing helpers they rely on.
 run starts
    │
    ▼
-discovery   (geoecon/stages/discovery.py, geoecon/gdelt.py, geoecon/regions.py)   ── "SEARCH"
+discovery   (geoecon/stages/discovery.py, geoecon/gdelt.py, geoecon/regions.py)   ── "SEARCH" (firehose)
    │   pull GDELT GKG files for the 24h window
    │   keep rows that carry an economic theme AND map to an active region bucket
    │   dedup, rank by theme density, cap per bucket → write `articles` rows (status = pending)
+   ▼
+discovery_registry  (geoecon/stages/discovery_registry.py, geoecon/registry.py, fetchers/)  ── "SEARCH" (curated)
+   │   fetch the curated source registry (rss / sitemap / scrape) → same `articles` table
+   │   (see 03-registry-redesign.md — this is the registry-driven multi-source layer)
    ▼
 extraction  (geoecon/stages/extract.py)                                           ── "FETCH"
    │   for each pending article: download the page, extract title + body text
@@ -20,10 +24,16 @@ extraction  (geoecon/stages/extract.py)                                         
 articles table now holds bodies (or a flagged fallback) ready for the LLM gate + processing
 ```
 
-These are the first two of the pipeline's eight stages
-(`discovery → extraction → gate → cluster → synthesis → summary → render → send`, see
+These are the first three of the pipeline's nine stages (`discovery → discovery_registry →
+extraction → gate → cluster → synthesis → summary → render → send`, see
 `geoecon/orchestrator.py`). Everything from the **gate** onward is the processing half —
 see **[02-processing-to-report.md](02-processing-to-report.md)**.
+
+> **Two discovery sources, one table.** GDELT discovery (below) is the firehose tripwire;
+> **`discovery_registry`** adds a curated, better-provenanced second source that converges
+> into the *same* `articles` table before extraction. This file details GDELT discovery +
+> extraction; the registry layer (fetchers, the source registry, provenance, URL-normalized
+> dedup) is **[03-registry-redesign.md](03-registry-redesign.md)**.
 
 **Key design choice: discovery and extraction are separate, best-effort operations.**
 GDELT is the *discovery spine* — it tells us *what* exists and *where*. Extraction is a
@@ -134,7 +144,9 @@ Each parsed record must clear **both** filters to survive discovery:
 
 ### Step 4 — Dedup, rank, cap
 
-- **Dedup** within the run by `url_hash = sha1(url.strip())` (`gdelt.url_hash`) — the same URL
+- **Dedup** within the run by `url_hash = normalized_url_hash(url)` (`geoecon/urlnorm.py`,
+  Change 3 — collapses www/AMP/tracking-param variants so GDELT and the registry dedup the
+  same story to one row; both discovery stages use it) — the same URL
   appearing across multiple 15-minute files is kept once.
 - **Rank** by a salience proxy: `gdelt.theme_salience(themes)` = the **density** of target
   themes among all of the record's themes (`hits / len(themes)`), highest first. Density

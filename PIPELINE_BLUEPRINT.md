@@ -2,29 +2,40 @@
 
 **Purpose:** A daily automated pipeline that discovers geoeconomic news across **MENA** and **Latin America** in multiple source languages (Arabic, Spanish, Portuguese, French, + Chinese/English where relevant), clusters it into events, synthesizes grounded structured records, and delivers a newsletter as both a standalone HTML archive and an email.
 
-**Status:** Architecture fully locked. Per-cluster model selected and validated. Output-language strategy decided. Postgres schema written and validated. Three evals remain queued (non-blocking).
+**Status:** Live in production (CERIT-SC k8s CronJob `geoecon-daily`, image `20260623-2`).
+Registry-driven multi-source redesign deployed + validated 2026-06-23. This blueprint is the
+high-level reference; the **authoritative living docs are `docs/how-it-works/`** — read those
+(esp. **03-registry-redesign.md**) for current behavior before editing.
 
-**Last updated:** working reference — update as queued items close.
+**Last updated:** 2026-06-23 (registry redesign). Update as behavior changes.
 
 ---
 
 ## 1. Pipeline at a glance
 
 ```
-07:00 cron (daily)
-  → 1a  DISCOVERY    GDELT 2.0, window [T-24h, T], prefilter ≥1 economic theme,
-                     NumMentions tiebreak, per-bucket ceiling (cfg.discovery_ceiling, default 120)
-  → 1b  EXTRACTION   trafilatura → GDELT-metadata fallback (headline-only) on fail
-  → 1c  RSS DEPTH    curated regional feeds (deferred config; empty for now)
-  → 1d  GATE         batched LLM geoeconomic+region gate; keep iff geoeconomic AND in-scope bucket
-  → 2   CLUSTER      multilingual event clustering (BGE-M3 provisional) + framing-divergence flag
-  → 3   SYNTHESIS    per-cluster JSON record (deepseek-v3.2 + coverage prompt)
-                     + throughline pass (stronger model, null-permitted)
-                     + production guard (validator.py)
-  → 4   RENDER+SEND  dual HTML (standalone archive + email-safe) → SMTP direct
-  STATE: Postgres — runs, stage checkpoints, article-level provenance,
-         seen-store (non-overlap), synthesis quality flags, resumable
+07:00 cron (daily) — 9 staged, resumable steps (geoecon/orchestrator.py)
+  → DISCOVERY           GDELT 2.0 firehose, window [T-24h, T], prefilter ≥1 economic theme,
+                        per-bucket ceiling (cfg.discovery_ceiling, default 120)
+  → DISCOVERY_REGISTRY  curated source registry (config/sources.yaml): rss / sitemap / scrape,
+                        converges into the SAME articles table; URL-normalized dedup vs GDELT.
+                        Writes source provenance. (docs/how-it-works/03-registry-redesign.md)
+  → EXTRACTION          trafilatura → GDELT/registry-metadata fallback (headline-only) on fail
+  → GATE                batched LLM geoeconomic+country gate; keep iff geoeconomic AND in-scope bucket
+  → CLUSTER             per-country LLM event grouping (lexical Jaccard fallback); computes
+                        provenance aggregates + corroboration_score (populated, not yet ranked)
+  → SYNTHESIS           per-cluster JSON record (deepseek-v3.2 + coverage prompt) + validator guard
+  → SUMMARY             per-region executive lede + takeaways
+  → RENDER              per-region dual HTML (standalone archive + email-safe). Ranks by gate_score;
+                        RANK_BY_CORROBORATION (OFF) switches to corroboration_score.
+  → SEND                one email per region → SMTP direct; on all-sent, write the seen-store
+  STATE: Postgres — runs, stage checkpoints, article-level provenance, cluster aggregates,
+         seen-store (non-overlap), synthesis quality flags, coverage metrics, resumable
 ```
+
+> **Note:** the original blueprint listed BGE-M3 embedding clustering and a throughline pass —
+> both superseded. Embedding clustering was reverted for per-country LLM grouping; the
+> throughline is a reserved future column. See the how-it-works docs for what actually runs.
 
 ---
 

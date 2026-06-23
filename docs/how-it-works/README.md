@@ -12,6 +12,11 @@ Read in order:
    news is *turned into reports*: relevance gate → clustering → LLM synthesis (with a
    quality gate) → per-region summary → HTML render → email send. "How it thinks about
    the news and ships the briefs."
+3. **[03-registry-redesign.md](03-registry-redesign.md)** — the **registry-driven
+   multi-source** redesign layered on top (Changes 1–4 + the sitemap strategy): the
+   second discovery source, source provenance, URL-normalized dedup, corroboration
+   scoring (dormant), the handoff guardrails, Task 0, and the live-env follow-ups.
+   Read this for anything touching `discovery_registry`, the registry, or provenance.
 
 ---
 
@@ -24,11 +29,11 @@ Read in order:
                                  ▼
         ┌──────────────────────────────────────────────────────────────┐
         │  orchestrator.run_pipeline()  — one run = one 24h window       │
-        │  drives 8 stages in order, recording progress in Postgres so   │
+        │  drives 9 stages in order, recording progress in Postgres so   │
         │  a crashed run RESUMES from the last completed stage           │
         └──────────────────────────────────────────────────────────────┘
                                  │
-   FETCH    discovery  ──►  extraction                                     (file 01)
+   FETCH    discovery + discovery_registry  ──►  extraction               (files 01, 03)
             GDELT GKG       trafilatura
             find URLs       get body text
                                  │
@@ -53,9 +58,11 @@ Read in order:
   (`geoecon.state.db`), builds the LLM client, then calls `run_pipeline(...)`.
 - **The run.** `run_pipeline()` defines the run's time window as `[now − WINDOW_HOURS, now]`
   (default 24h). It then either **resumes an existing run** for that window or **creates a
-  new one**, and executes the eight stages in order:
+  new one**, and executes the nine stages in order:
 
-  `discovery → extraction → gate → cluster → synthesis → summary → render → send`
+  `discovery → discovery_registry → extraction → gate → cluster → synthesis → summary → render → send`
+
+  (`discovery_registry` is the registry-driven second discovery source — see file 03.)
 
   Each stage is wrapped so that it:
   1. marks itself `running` in the `stage_runs` table,
@@ -76,13 +83,15 @@ A dedicated CloudNativePG database (`geoecon-db`) holds all run state. The schem
 |---|---|
 | `runs` | one row per daily window (status, models used, metrics JSON) |
 | `stage_runs` | per-stage checkpoint — the resume anchor |
-| `articles` | every discovered URL + its extraction outcome + the gate verdict (`gate_*`, `country_fips`) |
-| `clusters` / `cluster_articles` | event groupings and membership |
+| `articles` | every discovered URL + its extraction outcome + the gate verdict (`gate_*`, `country_fips`) + source provenance (`discovery_source`, `registry_id`, `source_tier`, `origin_class`, `ownership`, `state_alignment` — Change 2) |
+| `clusters` / `cluster_articles` | event groupings + provenance aggregates (`tier_min`, `has_primary`, `distinct_state_alignments`, `source_count`) and `corroboration_score` (Changes 2 & 4) |
 | `seen_events` | cross-day memory — suppress events already emitted |
 | `synthesis_records` | the per-cluster structured output + a quality flag |
 | `region_summaries` | the per-region executive lede + takeaways (one row per `(run_id, bucket)`) |
 | `newsletters` | the rendered artifact + the SMTP send outcome (one per region) |
 | `throughlines` | reserved for a future cross-cluster editorial thread |
+
+> Source registry lives in **`config/sources.yaml`** (data, not code). See file 03.
 
 ## Configuration knobs (env vars → `Config`)
 
@@ -91,9 +100,11 @@ the CronJob env. The most relevant:
 
 | Var | Default | Meaning |
 |---|---|---|
-| `WINDOW_HOURS` | `24` | discovery window `[T-WINDOW_HOURS, T]` |
+| `WINDOW_HOURS` | `24` | discovery window `[T-WINDOW_HOURS, T]` (both discovery sources) |
 | `BUCKETS` | `middle_east,north_africa,latam` | which region buckets are active (the operative keep/group set) |
-| `DISCOVERY_CEILING` | `120` | per-bucket cap on articles carried out of discovery |
+| `DISCOVERY_CEILING` | `120` | per-bucket cap on articles carried out of GDELT discovery |
+| `SOURCES_PATH` | `config/sources.yaml` | registry path for `discovery_registry` (set absolute in the container) |
+| `RANK_BY_CORROBORATION` | `false` | **OFF** — rank summary/render by `corroboration_score` vs `gate_score` (Change 4; flip only after live calibration) |
 | `GATE_MODEL` / `GATE_BATCH_SIZE` | `deepseek-v3.2` / `15` | the relevance-gate model and batch size |
 | `DEDUP_MODEL` / `DEDUP_JACCARD` | `deepseek-v3.2` / `0.6` | event-grouping model and the lexical-fallback threshold |
 | `REGION_CAP` | `12` | top records per region carried into summary/render |

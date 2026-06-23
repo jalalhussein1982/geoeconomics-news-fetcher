@@ -113,6 +113,13 @@ recognize the same event across days. `insert_cluster(...)` records the cluster 
 `country_fips`, `gate_score`, distinct `languages`, `article_count`) and `add_membership` links
 each member article.
 
+> **Provenance aggregates + corroboration (Changes 2 & 4).** `cluster.py` also computes, from
+> the members' provenance, `tier_min` / `has_primary` / `distinct_state_alignments` /
+> `source_count`, and a `corroboration_score` (`geoecon/corroboration.py`). These are
+> **populated but not yet used for ranking** — the primary is still `max(gate_score)`. The
+> ranking switch is dormant behind `RANK_BY_CORROBORATION` (see render/summary below and
+> **[03-registry-redesign.md](03-registry-redesign.md)**).
+
 > **Sanity check.** If the largest cluster swallows more than **25%** of the gated articles, the
 > stage logs a warning to verify it's really one event (a symptom of the grouping over-merging).
 
@@ -205,7 +212,13 @@ are excluded from the report.
 **File:** `geoecon/stages/summary.py` · **Prompt:** `geoecon/prompts/region_summary.txt`
 **Reads:** the `ok` synthesis records (`repo.records_for_buckets`)
 **Writes:** `region_summaries` (one row per `(run_id, bucket)`)
-**Config:** `SYNTHESIS_MODEL`, `REGION_CAP` (12), `BUCKETS`
+**Config:** `SYNTHESIS_MODEL`, `REGION_CAP` (12), `BUCKETS`, `RANK_BY_CORROBORATION`
+
+> **Ranking score (Change 4).** Summary and render both call
+> `records_for_buckets(run_id, cfg.rank_by_corroboration)`. The 4th tuple element is the
+> ranking score: `gate_score` by default, or `corroboration_score` when
+> `RANK_BY_CORROBORATION` is ON (ships **OFF**). The flag is the *only* behavioural switch;
+> with it off, ranking is unchanged. See **[03-registry-redesign.md](03-registry-redesign.md)**.
 
 This stage writes the **lede** that opens each regional brief. `summary.run()`:
 

@@ -24,7 +24,7 @@ spec:
             seccompProfile: { type: RuntimeDefault }
           containers:
             - name: pipeline
-              image: jalalhussein/geoecon-pipeline:20260623-2
+              image: jalalhussein/geoecon-pipeline:20260623-3
               args: ["run"]
               securityContext:
                 allowPrivilegeEscalation: false

@@ -1,0 +1,69 @@
+# One-off smoke test for the registry redesign (Changes 1–4 + sitemap).
+#
+# Mirrors the daily CronJob's pod exactly, but DRY_RUN=true (renders + writes the
+# archive HTML, sends NO email) and LIMIT=30 (cheap, fast). It runs the FULL
+# pipeline minus send — incl. real LLM synthesis — so it validates migrations,
+# registry discovery, the sitemap sources, and the coverage metrics end to end.
+# DRY_RUN means seen_events is NOT touched, so this cannot suppress events for the
+# real daily run.
+#
+# Usage:
+#   kubectl apply -f deploy/smoke-job.yaml
+#   kubectl -n hussein-ns logs -f job/geoecon-smoke
+#   # inspect: runs.metrics in Postgres, the archive HTML on the PVC, and the logs for
+#   #   - migrations 004 + 005 applied
+#   #   - registry_discovered > 0, registry_per_tier
+#   #   - core15_primaries_live: 6, tier1_live: 2, tier1_held: 4
+#   #   - "recall-floor" WARNINGs (wire_ap, wire_reuters_world, wire_efe, actor_china_mofcom)
+#   # re-run: kubectl -n hussein-ns delete job geoecon-smoke   (then apply again)
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: geoecon-smoke
+  namespace: hussein-ns
+spec:
+  backoffLimit: 1
+  ttlSecondsAfterFinished: 3600   # auto-clean an hour after it finishes
+  template:
+    metadata:
+      labels: { app: geoecon, run: smoke }
+    spec:
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: pipeline
+          image: jalalhussein/geoecon-pipeline:20260623-1
+          args: ["run"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: ["ALL"] }
+          envFrom:
+            - secretRef: { name: geoecon-secrets }
+          env:
+            - name: DB_USER
+              valueFrom: { secretKeyRef: { name: geoecon-db-app, key: username } }
+            - name: DB_PASS
+              valueFrom: { secretKeyRef: { name: geoecon-db-app, key: password } }
+            - name: DB_DSN
+              value: "postgresql://$(DB_USER):$(DB_PASS)@geoecon-db-rw:5432/geoeconomics"
+            - name: SOURCES_PATH
+              value: "/app/config/sources.yaml"
+            - name: RANK_BY_CORROBORATION
+              value: "false"
+            # --- smoke-only overrides ---
+            - name: DRY_RUN
+              value: "true"          # render + archive, but do NOT send email
+            - name: LIMIT
+              value: "30"            # cap per-bucket discovery so the run is cheap/fast
+          resources:
+            requests: { cpu: "1", memory: "1Gi" }
+            limits: { cpu: "2", memory: "2Gi" }
+          volumeMounts:
+            - { name: archive, mountPath: /data/archive }
+      volumes:
+        - name: archive
+          persistentVolumeClaim: { claimName: geoecon-archive }

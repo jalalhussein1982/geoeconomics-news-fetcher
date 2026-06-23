@@ -15,15 +15,10 @@ def build_summary_messages(prompt: str, region_display: str, records) -> list[di
     parts = []
     for rec in records:
         f = rec.fields
-        figs = "; ".join(
-            f"{k.get('value', '')}{k.get('unit', '') or ''} {k.get('gloss_en', '') or ''}".strip()
-            for k in (f.get("key_figures") or [])
-        )
         block = "\n".join(x for x in [
             f"HEADLINE: {f.get('headline_en', '')}",
             f"WHAT HAPPENED: {f.get('what_happened_en', '')}",
             f"SIGNIFICANCE: {f.get('geoeconomic_significance_en', '')}",
-            (f"KEY FIGURES: {figs}" if figs else ""),
         ] if x)
         parts.append(block)
     system = prompt.replace("{REGION}", region_display)

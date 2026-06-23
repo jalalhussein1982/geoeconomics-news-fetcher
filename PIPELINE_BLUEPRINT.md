@@ -249,3 +249,19 @@ Surface forms stored in **both** source-language original and English; synthesis
 **New config knobs** (all have env-var overrides): `gate_model` (`GATE_MODEL`, default `deepseek-v3.2`), `gate_batch_size` (`GATE_BATCH_SIZE`, default 15), `region_cap` (`REGION_CAP`, default 12), `discovery_ceiling` (`DISCOVERY_CEILING`, default 120), `dedup_jaccard` (`DEDUP_JACCARD`, default 0.6).
 
 **Per-country LLM event grouping** (replaces embedding clustering): the cluster stage now buckets gated articles by gate-assigned country and calls the LLM (`dedup_model`, `deepseek-v3.2`) to partition each country's articles into distinct events; the lexical title-Jaccard merge is retained only as the per-country fallback on LLM failure. The embedding approach (`multilingual-e5-large-instruct` cosine similarity) was tried and removed — it over-merged distinct events. `LLMClient.embed()` and `cluster_cosine_threshold` no longer exist.
+
+---
+
+## 14. Brief output-quality refinement (figures cap, exec-summary trim, market-roundup demotion)
+
+Display/ranking-layer fixes from the 2026-06-23 brief evaluation (a recipient review found accurate facts but unreadable finance stories). No schema/prompt/extraction changes — figures are still fully extracted; only what's *shown* and *how it's ordered* changed. Spec/plan: `docs/superpowers/{specs,plans}/2026-06-23-brief-output-quality-refinement*.md`.
+
+**Figures line — cap + salience + numeric dedup** (`render.format_figures`): the per-story `figures_text` is now ranked (figures whose value appears in the story prose first), de-duped by a **locale/currency-aware numeric key** (so `49.66%`/`49,66%` and `US$72`/`72 USD` collapse), and **capped at `FIGURES_MAX` (8)**. This kills the 80–150-figure "salad" that finance / feasibility-table sources (e.g. mining DFS, index roundups) dumped into one line. `FIGURES_MAX=0` disables the cap.
+
+**Exec-summary input trim** (`summary.build_summary_messages`): the raw `key_figures` dump is no longer fed to the region-summary LLM — only headline / what-happened / significance. Finance-table figure blobs were muddying the lede; the prose already carries the salient numbers.
+
+**Market-roundup demotion** (`geoecon/ranking.py`, new): both summary and render now rank via `ranking.make_score_of(cfg)` instead of raw `gate_score`. When `MARKET_DEMOTE` is on (default), a record reading as a **US/global market-index or commodity roundup** (S&P 500, Nasdaq, Dow, Wall Street, gold futures, …) is penalised so it sorts **below** every country-subject story — never dropped, just last (trimmed first on `REGION_CAP` overflow). Country-qualified markets ("Argentine stocks", Ibovespa, EGX) and index *reclassification* (MSCI) are deliberately spared. `MARKET_DEMOTE=false` disables it.
+
+**New config knobs**: `figures_max` (`FIGURES_MAX`, default 8), `market_demote` (`MARKET_DEMOTE`, default true).
+
+**Deployed** in image `20260623-3` (cut over 2026-06-23). DRY_RUN smoke (run_id 18) confirmed figures capped at 8 in all three regions and no market-demote false positives; the market-demote *positive* path awaits a day with US-market roundups in the brief. **Deferred** (out of scope by decision): event-grouping over-split (one storyline as N items), the occasional garbled entity name, and oil-price-term demotion (oil is Middle-East-relevant, so deliberately not demoted).

@@ -212,13 +212,22 @@ are excluded from the report.
 **File:** `geoecon/stages/summary.py` · **Prompt:** `geoecon/prompts/region_summary.txt`
 **Reads:** the `ok` synthesis records (`repo.records_for_buckets`)
 **Writes:** `region_summaries` (one row per `(run_id, bucket)`)
-**Config:** `SYNTHESIS_MODEL`, `REGION_CAP` (12), `BUCKETS`, `RANK_BY_CORROBORATION`
+**Config:** `SYNTHESIS_MODEL`, `REGION_CAP` (12), `BUCKETS`, `RANK_BY_CORROBORATION`, `MARKET_DEMOTE`
 
 > **Ranking score (Change 4).** Summary and render both call
 > `records_for_buckets(run_id, cfg.rank_by_corroboration)`. The 4th tuple element is the
 > ranking score: `gate_score` by default, or `corroboration_score` when
 > `RANK_BY_CORROBORATION` is ON (ships **OFF**). The flag is the *only* behavioural switch;
 > with it off, ranking is unchanged. See **[03-registry-redesign.md](03-registry-redesign.md)**.
+
+> **Market-roundup demotion (2026-06-23).** Both stages now sort via
+> `ranking.make_score_of(cfg)` (`geoecon/ranking.py`) rather than the raw `gate_score`. When
+> `MARKET_DEMOTE` is on (default), any record whose headline/what-happened reads as a **US/global
+> market-index or commodity roundup** (S&P 500, Nasdaq, Dow, Wall Street, gold futures, …) gets a
+> large penalty so it sorts **below** every country-subject story — never dropped, just ranked
+> last (and trimmed first when a bucket overflows `REGION_CAP`). Country-qualified markets
+> ("Argentine stocks", "Colombian peso", Ibovespa, EGX) and index *reclassification* (MSCI) are
+> deliberately **spared**. `MARKET_DEMOTE=false` disables it.
 
 This stage writes the **lede** that opens each regional brief. `summary.run()`:
 
@@ -227,8 +236,11 @@ This stage writes the **lede** that opens each regional brief. `summary.run()`:
    the top `REGION_CAP` (12) by `gate_score` — the same selection render uses, so the summary
    describes exactly the items the brief will show.
 2. For each **non-empty** bucket, `build_summary_messages` feeds those records' headline /
-   what-happened / significance / key-figures into `region_summary.txt` (with `{REGION}` set to
+   what-happened / significance into `region_summary.txt` (with `{REGION}` set to
    the display name) and calls the LLM (`SYNTHESIS_MODEL`, deterministic, `max_tokens=2048`).
+   *(As of 2026-06-23 the raw `key_figures` dump is **no longer** fed to the summary LLM —
+   finance-table figure blobs were muddying the exec summary, and the prose already carries the
+   salient numbers.)*
 3. A valid reply yields a `lede` + a list of `takeaways`; an invalid/empty reply stores a
    `NULL` lede and `[]` takeaways (counted as `summaries_empty` — the brief still renders, just
    without an executive summary). Persisted via `upsert_region_summary`.
@@ -244,14 +256,20 @@ This stage writes the **lede** that opens each regional brief. `summary.run()`:
 (`repo.get_region_summary`)
 **Writes:** `newsletters` (one per non-empty bucket), and an archive HTML file per bucket to the
 `geoecon-archive` PVC
-**Config:** `REGION_CAP` (12), `BUCKETS`, `ARCHIVE_DIR`
+**Config:** `REGION_CAP` (12), `BUCKETS`, `ARCHIVE_DIR`, `FIGURES_MAX` (8), `MARKET_DEMOTE`
 
 `render.run()` **loops over the active buckets**. For each non-empty bucket it takes the top
-`REGION_CAP` (12) `ok` records (by `gate_score`), and for each record attaches:
+`REGION_CAP` (12) `ok` records by the ranking score (`ranking.make_score_of(cfg)` — `gate_score`
+with US/global market roundups demoted; see the Summary stage's market-demotion note), and for
+each record attaches:
 
 - **verified source links** — taken from `articles.source_url` (the real GDELT URLs), **not**
   the LLM's `sources` field; and
-- a **de-duped figures string** (`format_figures`, joined with " · ").
+- a **figures string** (`format_figures`): figures whose value appears in the story prose are
+  ranked first, duplicates are collapsed by a locale/currency-aware numeric key (so `49.66%` /
+  `49,66%` and `US$72` / `72 USD` each count once), and the line is **capped at `FIGURES_MAX`
+  (8)** — added 2026-06-23 to kill the 80–150-number "salad" that finance / feasibility-table
+  sources produced (`FIGURES_MAX=0` disables the cap). Joined with " · ".
 
 It pulls that bucket's `region_summary`, then produces **two** HTML documents from the same data
 (`render_html(records, mode="en_only", date_str, summary, region_display, stats)`):

@@ -37,6 +37,21 @@ def run(cfg, repo, run_id: int, *, sources=None, get_fetcher=None, now=None) -> 
     if get_fetcher is None:
         get_fetcher = fetchers_base.get_fetcher
 
+    # Recall-floor guard: the Tier-1 wire tier exists to catch what every other
+    # tier misses, so a held wire is a hole in the floor — make it LOUD, not just a
+    # metric. A future wire dropping to needs_review/dead trips this too.
+    tier1 = [s for s in sources if s.tier == 1]
+    tier1_held = [s for s in tier1 if s.status != "live"]
+    for s in tier1_held:
+        log.warning("recall-floor: Tier-1 wire %s is NOT fetching (status=%s, fetch_type=%s) "
+                    "— a hole in the recall floor", s.id, s.status, s.fetch_type)
+
+    # Core-15 primary coverage: the redesign's progress bar. Distinct Tier-0
+    # countries with at least one live primary, out of all Tier-0 countries.
+    core_countries = {s.country_fips for s in sources if s.tier == 0 and s.country_fips}
+    core_live = {s.country_fips for s in sources
+                 if s.tier == 0 and s.country_fips and s.status == "live"}
+
     active_buckets = set(cfg.buckets)
     discovered = 0
     skipped_unverified = skipped_needs_review = skipped_dead = 0
@@ -102,6 +117,12 @@ def run(cfg, repo, run_id: int, *, sources=None, get_fetcher=None, now=None) -> 
         "registry_skipped_unverified": skipped_unverified,
         "registry_skipped_needs_review": skipped_needs_review,
         "registry_per_tier": per_tier,
+        # coverage telemetry — first-class, so the redesign's objective is monitorable
+        # and a regression (a feed dying, a sitemap going stale) surfaces in a number.
+        "core15_primaries_live": len(core_live),
+        "core15_primaries_total": len(core_countries),
+        "tier1_live": len(tier1) - len(tier1_held),
+        "tier1_held": len(tier1_held),
     }
     log.info("discovery_registry: %s", metrics)
     return metrics

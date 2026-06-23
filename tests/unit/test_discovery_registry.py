@@ -122,6 +122,26 @@ def test_within_stage_url_dedup():
     assert m["registry_discovered"] == 1
 
 
+def test_coverage_metrics_and_tier1_recall_floor_warning(caplog):
+    import logging
+    sources = [
+        _src(id="sa1", tier=0, country_fips="SA", bucket="middle_east", status="live", fetch_type="rss"),
+        _src(id="sa2", tier=0, country_fips="SA", bucket="middle_east", status="needs_review", fetch_type="scrape"),
+        _src(id="eg1", tier=0, country_fips="EG", bucket="middle_east", status="needs_review", fetch_type="scrape"),
+        _src(id="wire_live", tier=1, country_fips=None, bucket=None, status="live", fetch_type="rss"),
+        _src(id="wire_held", tier=1, country_fips=None, bucket=None, status="needs_review", fetch_type="scrape"),
+    ]
+    with caplog.at_level(logging.WARNING):
+        m = discovery_registry.run(_cfg(), FakeRepo(), 1, sources=sources,
+                                   get_fetcher=_fetcher_for({}), now=NOW)
+    assert m["core15_primaries_live"] == 1    # SA has a live primary; EG does not
+    assert m["core15_primaries_total"] == 2   # SA, EG
+    assert m["tier1_live"] == 1 and m["tier1_held"] == 1
+    # the held wire is named loudly, not just counted
+    assert "recall-floor" in caplog.text and "wire_held" in caplog.text
+    assert "wire_live" not in caplog.text     # a live wire does not warn
+
+
 def test_one_bad_source_does_not_abort():
     def boom(src):
         class _F:

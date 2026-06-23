@@ -317,19 +317,27 @@ def probe_all(sources, workers: int) -> list[dict]:
     return results
 
 
+# Strategy precedence: rss/api > sitemap > scrape (most stable + cheapest first;
+# scrape selectors rot fastest). See tools/README.md. Enforced here so re-resolution
+# is deterministic, not last-writer-wins, when strategies compete across runs.
+PRECEDENCE = {"rss": 3, "api": 3, "sitemap": 2, "scrape": 1}
+
+
 def merge(prev: list[dict], cur: list[dict]) -> list[dict]:
-    """Feeds/sitemaps don't vanish: keep an earlier confirmed live result (rss or
-    sitemap) if this pass flaked to needs_review."""
-    live = {"rss", "sitemap"}
+    """Keep the higher-precedence live result across runs (feeds/sitemaps don't
+    vanish). A prior live result wins if this pass flaked OR if it ranks higher
+    than this pass's result — so two runs over the same sources converge."""
     by_id = {r["id"]: r for r in prev}
     for r in cur:
         p = by_id.get(r["id"])
-        if r["fetch_type"] not in live and p and p.get("fetch_type") in live:
+        if not p:
+            continue
+        if PRECEDENCE.get(p.get("fetch_type"), 0) > PRECEDENCE.get(r["fetch_type"], 0):
             note = p["note"]
             if "prior probe" not in note:
-                note += " (confirmed in a prior probe; flaked this run)"
-            r.update(fetch_type=p["fetch_type"], feed_url=p["feed_url"], status="live",
-                     clear_probe_paths=True, note=note)
+                note += " (kept from a prior probe: higher precedence / this pass flaked)"
+            r.update(fetch_type=p["fetch_type"], feed_url=p.get("feed_url"), status=p["status"],
+                     clear_probe_paths=p.get("clear_probe_paths", False), note=note)
     return cur
 
 

@@ -23,6 +23,31 @@ Probe a subset (e.g. to re-resolve a few primaries from a better-networked host)
 python tools/registry_probe.py --only sa_cb_sama,ae_cb_cbuae --out tools/registry_probe_results.json
 ```
 
+## Strategy precedence (deterministic re-resolution order)
+
+When a source could resolve under more than one strategy — e.g. it exposes both an
+RSS feed and a sitemap, or (after a headless pass) both a sitemap and a scrape
+selector — resolve it to the **first** that applies, in this order:
+
+> **rss / api  >  sitemap  >  scrape**
+
+Rationale: most stable and cheapest first. A feed/API is a purpose-built, dated
+list; a sitemap is windowable but broad; a scrape selector rots fastest (it breaks
+on any redesign). Picking the higher-precedence strategy keeps discovery cheap and
+durable.
+
+This is enforced, not just documented:
+- `registry_probe.py::classify` tries the strategies in this order and returns on
+  the first hit (so a source with a feed never resolves to its sitemap).
+- `registry_probe.py::merge` (the `--runs`/re-run combiner) keeps the
+  higher-precedence live result across passes via `PRECEDENCE`, so two
+  re-resolution runs over the same sources converge to the **same** registry
+  rather than last-writer-wins.
+
+**Consolidated live-env re-resolution** (headless + API re-probe + sitemap in one
+pass) MUST apply this rule: a freshly-captured scrape selector does NOT override an
+existing rss/sitemap resolution.
+
 ## Classification policy (conservative)
 
 - `rss` — a feed was found and validated through feedparser (≥1 entry).

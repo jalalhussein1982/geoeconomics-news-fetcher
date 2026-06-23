@@ -24,7 +24,7 @@ spec:
             seccompProfile: { type: RuntimeDefault }
           containers:
             - name: pipeline
-              image: jalalhussein/geoecon-pipeline:20260621-1
+              image: jalalhussein/geoecon-pipeline:20260623-1
               args: ["run"]
               securityContext:
                 allowPrivilegeEscalation: false
@@ -38,6 +38,13 @@ spec:
                   valueFrom: { secretKeyRef: { name: geoecon-db-app, key: password } }
                 - name: DB_DSN
                   value: "postgresql://$(DB_USER):$(DB_PASS)@geoecon-db-rw:5432/geoeconomics"
+                # absolute path to the shipped registry (Dockerfile COPY config),
+                # so resolution does not depend on import location / CWD.
+                - name: SOURCES_PATH
+                  value: "/app/config/sources.yaml"
+                # Change 4 ranking switch stays OFF until live calibration (see memory).
+                - name: RANK_BY_CORROBORATION
+                  value: "false"
               resources:
                 requests: { cpu: "1", memory: "1Gi" }
                 limits: { cpu: "2", memory: "2Gi" }

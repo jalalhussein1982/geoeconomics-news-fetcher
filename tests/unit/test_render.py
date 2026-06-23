@@ -77,3 +77,8 @@ def test_format_figures_salience_orders_referenced_first():
             {"value": "42", "unit": ""}]     # appears in prose -> ranked first
     out = render.format_figures(figs, context_text="growth hit 42 this year")
     assert out == "42 · 999"
+
+
+def test_format_figures_zero_means_no_cap():
+    figs = [{"value": str(i), "unit": ""} for i in range(1, 13)]  # 12 figures
+    assert len(render.format_figures(figs, max_figures=0).split(" · ")) == 12

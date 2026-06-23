@@ -53,7 +53,7 @@ def _canon_key(val: str, unit: str) -> tuple:
 
 
 def _ctx_positions(text: str) -> dict:
-    """First-occurrence index of each normalized numeric token in *text*."""
+    """First-occurrence ordinal of each normalized numeric token in *text*."""
     pos: dict[str, int] = {}
     for i, m in enumerate(_NUM_RE.finditer(text or "")):
         pos.setdefault(_norm_num(m.group(0)), i)

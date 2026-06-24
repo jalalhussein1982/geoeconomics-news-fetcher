@@ -29,16 +29,28 @@ def is_market_roundup(rec) -> bool:
 def make_score_of(cfg) -> Callable[[tuple], float]:
     """Return a score_of(record_tuple) for regions.top_per_bucket.
 
-    record_tuple is (SynthesisRecord, country_fips, source_links, rank_score). When
-    cfg.market_demote is on, flagged market roundups get a large penalty so they sort
-    below every country-subject story; relative order among them is preserved.
+    record_tuple is (SynthesisRecord, country_fips, source_links, rank_score,
+    has_curated, has_economy_section). When cfg.market_demote is on, flagged market
+    roundups get a large penalty so they sort below every country-subject story
+    (and are NOT rescued by the curated/economy nudge). When cfg.curated_preference
+    is on, economy-section clusters get a small boost and curated clusters a small
+    boost — mild reordering of ties, never dominating gate_score. Tuples shorter
+    than 6 elements are treated as not-curated/not-economy (backward compatible).
     """
     demote = getattr(cfg, "market_demote", True)
+    prefer = getattr(cfg, "curated_preference", False)
+    curated_boost = getattr(cfg, "curated_boost", 0.0)
+    economy_boost = getattr(cfg, "economy_section_boost", 0.0)
 
     def score_of(t) -> float:
         base = t[3] or 0.0
         if demote and is_market_roundup(t[0]):
             return base - _MARKET_PENALTY
+        if prefer:
+            if len(t) > 5 and t[5]:
+                base += economy_boost
+            if len(t) > 4 and t[4]:
+                base += curated_boost
         return base
 
     return score_of

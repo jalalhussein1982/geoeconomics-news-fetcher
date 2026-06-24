@@ -14,14 +14,13 @@ import requests
 from lxml import html as lxml_html
 
 from .base import DiscoveredItem
+from .http import BROWSER_UA
 
 log = logging.getLogger("geoecon.fetchers.scrape")
 
-_UA = "Mozilla/5.0 (compatible; geoecon/1.0; +https://github.com/geoecon)"
-
 
 def _default_fetch(url: str) -> str | None:
-    resp = requests.get(url, timeout=30, headers={"User-Agent": _UA})
+    resp = requests.get(url, timeout=30, headers={"User-Agent": BROWSER_UA})
     resp.raise_for_status()
     return resp.text
 

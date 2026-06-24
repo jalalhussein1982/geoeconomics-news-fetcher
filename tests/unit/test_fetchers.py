@@ -5,6 +5,7 @@ import pytest
 
 from geoecon.registry import Source
 from geoecon.fetchers import base
+from geoecon.fetchers import http as fetch_http
 from geoecon.fetchers.rss import RssFetcher
 from geoecon.fetchers.scrape import ScrapeFetcher
 from geoecon.fetchers.sitemap import SitemapFetcher
@@ -42,12 +43,53 @@ def test_rss_parses_entries_and_ts():
         {"link": "https://example.org/b", "title": "B"},   # no ts -> None
         {"title": "no link"},                                # skipped
     ]
-    f = RssFetcher(parse=lambda target: _FakeParsed(entries))
+    f = RssFetcher(parse=lambda target, **kw: _FakeParsed(entries))
     items = f.discover(_src(feed_url="https://example.org/feed", lang="ar"))
     assert [i.url for i in items] == ["https://example.org/a", "https://example.org/b"]
     assert items[0].ts == datetime.fromtimestamp(time.mktime(st), tz=timezone.utc)
     assert items[1].ts is None
     assert all(i.source_lang == "ar" for i in items)
+
+
+def test_browser_ua_looks_like_a_browser():
+    assert "Mozilla/5.0" in fetch_http.BROWSER_UA
+    assert "Chrome" in fetch_http.BROWSER_UA
+
+
+def test_rss_passes_browser_ua_to_parser():
+    captured = {}
+    def fake_parse(target, **kw):
+        captured["target"] = target
+        captured["agent"] = kw.get("agent")
+        return _FakeParsed([{"link": "https://example.org/a", "title": "A"}])
+    f = RssFetcher(parse=fake_parse)
+    f.discover(_src(feed_url="https://example.org/feed"))
+    assert captured["agent"] == fetch_http.BROWSER_UA
+
+
+def test_rss_rewrites_private_ip_link_to_source_host():
+    entries = [{"link": "https://10.0.137.12/economia/nota-1", "title": "A"},
+               {"link": "https://larazon.bo/economia/nota-2", "title": "B"}]
+    f = RssFetcher(parse=lambda target, **kw: _FakeParsed(entries))
+    items = f.discover(_src(feed_url="https://larazon.bo/feed/",
+                            url="https://larazon.bo/"))
+    # private-IP host rewritten to the source's public host; path preserved
+    assert items[0].url == "https://larazon.bo/economia/nota-1"
+    # already-public URL untouched
+    assert items[1].url == "https://larazon.bo/economia/nota-2"
+
+
+def test_scrape_default_fetch_sends_browser_ua(monkeypatch):
+    seen = {}
+    class _Resp:
+        text = "<html></html>"
+        def raise_for_status(self): pass
+    def fake_get(url, timeout=None, headers=None):
+        seen["ua"] = (headers or {}).get("User-Agent"); return _Resp()
+    monkeypatch.setattr("geoecon.fetchers.scrape.requests.get", fake_get)
+    from geoecon.fetchers.scrape import _default_fetch
+    _default_fetch("https://example.org")
+    assert seen["ua"] == fetch_http.BROWSER_UA
 
 
 # ---- scrape ----

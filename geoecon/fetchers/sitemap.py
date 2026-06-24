@@ -22,16 +22,15 @@ import requests
 from lxml import etree
 
 from .base import DiscoveredItem
+from .http import BROWSER_UA
 
 log = logging.getLogger("geoecon.fetchers.sitemap")
-
-_UA = "Mozilla/5.0 (compatible; geoecon/1.0; +https://github.com/geoecon)"
 _MAX_DEPTH = 2
 _MAX_CHILDREN = 25  # cap child sitemaps fetched from an index (recent-first)
 
 
 def _default_fetch(url: str) -> bytes | None:
-    resp = requests.get(url, timeout=30, headers={"User-Agent": _UA})
+    resp = requests.get(url, timeout=30, headers={"User-Agent": BROWSER_UA})
     resp.raise_for_status()
     return resp.content
 

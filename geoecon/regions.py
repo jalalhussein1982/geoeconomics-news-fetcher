@@ -97,8 +97,32 @@ def country_to_fips(name: str | None) -> str | None:
     return _NAME_TO_FIPS.get(name.strip().lower())
 
 
+def cap_per_country(sorted_items, country_of: Callable, cap: int, n: int) -> list:
+    """From score-desc *sorted_items*, keep at most *cap* per country (score order
+    preserved). If the capped set has >= n items, return its top n. Otherwise backfill
+    with the highest-score over-cap surplus so the result still fills to n (never
+    shrinks the brief below an uncapped selection — a one-country day still fills)."""
+    selected, overflow, per_country = [], [], {}
+    for it in sorted_items:
+        c = country_of(it)
+        if per_country.get(c, 0) < cap:
+            selected.append(it)
+            per_country[c] = per_country.get(c, 0) + 1
+        else:
+            overflow.append(it)
+    if len(selected) >= n:
+        return selected[:n]
+    return (selected + overflow)[:n]
+
+
 def top_per_bucket(items, country_of: Callable, score_of: Callable, n: int,
-                   active: Iterable[str] = BUCKET_ORDER) -> dict[str, list]:
-    """group_by_bucket, then sort each bucket by score_of desc and keep the top n."""
+                   active: Iterable[str] = BUCKET_ORDER, country_cap: int | None = None) -> dict[str, list]:
+    """group_by_bucket, sort each bucket by score_of desc, keep the top n. When
+    country_cap is set (>0), no country takes more than that many of a bucket's n slots
+    (see cap_per_country); when falsy, behaviour is the prior plain top-n."""
     grouped = group_by_bucket(items, country_of, active)
-    return {b: sorted(v, key=score_of, reverse=True)[:n] for b, v in grouped.items()}
+    out: dict[str, list] = {}
+    for b, v in grouped.items():
+        s = sorted(v, key=score_of, reverse=True)
+        out[b] = cap_per_country(s, country_of, country_cap, n) if country_cap else s[:n]
+    return out

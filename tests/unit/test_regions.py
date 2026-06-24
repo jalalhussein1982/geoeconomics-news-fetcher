@@ -68,3 +68,52 @@ def test_top_per_bucket_ranks_caps_and_handles_egypt_dual():
     assert me == ["eg", "sa"]          # top 2 of EG/SA/IR by score
     assert na == ["eg", "ly"]          # Egypt appears in NA too, independently capped
     assert la == ["br"]
+
+
+def test_cap_per_country_limits_dominant_when_supply_exists():
+    # 9 IR (highest scores) + 8 distinct others; cap 4, n 12
+    items = ([("IR", 100 - i) for i in range(9)]
+             + [("QA", 20), ("AE", 19), ("LE", 18), ("KU", 17),
+                ("BA", 16), ("JO", 15), ("SY", 14), ("YM", 13)])
+    out = regions.cap_per_country(items, lambda t: t[0], cap=4, n=12)
+    assert len(out) == 12
+    assert sum(1 for t in out if t[0] == "IR") == 4          # IR capped at 4
+    assert [t[0] for t in out[:4]] == ["IR", "IR", "IR", "IR"]  # IR top-4 by score kept, order preserved
+
+
+def test_cap_per_country_backfills_when_supply_thin():
+    # 7 IR + 2 others = 9 total; cap 4, n 12 -> never invents, backfills IR surplus to stay full
+    items = [("IR", 100 - i) for i in range(7)] + [("QA", 5), ("AE", 4)]
+    out = regions.cap_per_country(items, lambda t: t[0], cap=4, n=12)
+    assert len(out) == 9                                      # only 9 items exist
+    assert sum(1 for t in out if t[0] == "IR") == 7          # 4 + 3 backfilled surplus
+
+
+def test_cap_per_country_noop_when_under_cap():
+    items = [("QA", 5), ("AE", 4), ("IR", 3), ("IR", 2)]
+    assert regions.cap_per_country(items, lambda t: t[0], cap=4, n=12) == items
+
+
+def test_top_per_bucket_applies_country_cap():
+    # 9 IR + 8 distinct middle_east others (17 items) so the capped set reaches n=12
+    # WITHOUT backfill -> IR capped at exactly 4.
+    score_of = lambda t: t[3]
+    items = ([("r", "IR", None, 100 - i) for i in range(9)]
+             + [("r", "QA", None, 20), ("r", "AE", None, 19), ("r", "LE", None, 18),
+                ("r", "KU", None, 17), ("r", "BA", None, 16), ("r", "SA", None, 15),
+                ("r", "JO", None, 14), ("r", "SY", None, 13)])
+    grouped = regions.top_per_bucket(items, country_of=lambda t: t[1], score_of=score_of,
+                                     n=12, active=("middle_east",), country_cap=4)
+    me = grouped["middle_east"]
+    assert len(me) == 12 and sum(1 for t in me if t[1] == "IR") == 4
+
+
+def test_top_per_bucket_cap_none_is_unchanged():
+    score_of = lambda t: t[3]
+    items = [("r", "IR", None, 100 - i) for i in range(9)] + [("r", "QA", None, 1)]
+    off = regions.top_per_bucket(items, country_of=lambda t: t[1], score_of=score_of,
+                                 n=12, active=("middle_east",))
+    explicit_none = regions.top_per_bucket(items, country_of=lambda t: t[1], score_of=score_of,
+                                           n=12, active=("middle_east",), country_cap=None)
+    assert off == explicit_none
+    assert len(off["middle_east"]) == 10   # all 10 items, no cap applied

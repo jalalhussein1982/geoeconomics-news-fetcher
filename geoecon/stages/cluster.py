@@ -1,6 +1,6 @@
 from __future__ import annotations
 import hashlib, json, logging, re
-from .. import corroboration, regions
+from .. import corroboration, regions, registry
 
 log = logging.getLogger("geoecon.cluster")
 
@@ -110,13 +110,18 @@ def _lexical_groups(arts, threshold):
     return [[arts[m] for m in members] for members in uf.groups().values()]
 
 
-def run(cfg, repo, run_id: int, client) -> dict:
+def run(cfg, repo, run_id: int, client, *, sources=None) -> dict:
     arts = [a for a in repo.articles_for_run(run_id)
             if a.gate_geoeconomic and a.fetch_status != "failed"
             and regions.buckets_for_country(a.country_fips, cfg.buckets)]
     if not arts:
         log.info("cluster: 0 clusters from 0 gated articles")
         return {"clusters": 0, "max_cluster_size": 0}
+
+    if sources is None:
+        sources = registry.load_sources(getattr(cfg, "sources_path", None))
+    curated_ids = {s.id for s in sources if s.curated}
+    economy_ids = {s.id for s in sources if s.section == "economy"}
 
     by_country: dict = {}
     for a in arts:
@@ -144,6 +149,8 @@ def run(cfg, repo, run_id: int, client) -> dict:
         tier_min = min(tiers) if tiers else None
         has_primary = any(a.source_tier == 0 for a in member_arts)
         distinct_alignments = len({a.state_alignment for a in member_arts if a.state_alignment})
+        has_curated = any(a.registry_id in curated_ids for a in member_arts)
+        has_economy_section = any(a.registry_id in economy_ids for a in member_arts)
         cid = repo.insert_cluster(
             run_id, fp, primary.region, langs, len(member_arts),
             country_fips=primary.country_fips, gate_score=primary.gate_score,
@@ -152,6 +159,7 @@ def run(cfg, repo, run_id: int, client) -> dict:
             corroboration_score=corroboration.score(
                 tier_min=tier_min, has_primary=has_primary,
                 distinct_state_alignments=distinct_alignments, source_count=len(member_arts)),
+            has_curated=has_curated, has_economy_section=has_economy_section,
         )
         for a in member_arts:
             repo.add_membership(cid, a.article_id)

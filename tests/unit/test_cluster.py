@@ -5,11 +5,12 @@ from geoecon.state.models import Article
 
 
 def _art(aid, title, country="SA", geo=True, score=0.5, body="body",
-         source_tier=None, state_alignment=None):
+         source_tier=None, state_alignment=None, registry_id=None):
     return Article(aid, f"http://x/{aid}", f"h{aid}", "d", "MENA", [], None, None,
                    "en", title, body, "extracted", country,
                    gate_geoeconomic=geo, gate_score=score,
-                   source_tier=source_tier, state_alignment=state_alignment)
+                   source_tier=source_tier, state_alignment=state_alignment,
+                   registry_id=registry_id)
 
 
 class FakeRepo:
@@ -19,14 +20,17 @@ class FakeRepo:
     def insert_cluster(self, run_id, fp, region, langs, count,
                        framing_divergent=False, country_fips=None, gate_score=None,
                        tier_min=None, has_primary=None, distinct_state_alignments=None,
-                       source_count=None, corroboration_score=None):
+                       source_count=None, corroboration_score=None,
+                       has_curated=False, has_economy_section=False):
         cid = len(self.clusters) + 1
         self.clusters.append(dict(cid=cid, count=count, country_fips=country_fips,
                                   gate_score=gate_score, tier_min=tier_min,
                                   has_primary=has_primary,
                                   distinct_state_alignments=distinct_state_alignments,
                                   source_count=source_count,
-                                  corroboration_score=corroboration_score)); return cid
+                                  corroboration_score=corroboration_score,
+                                  has_curated=has_curated,
+                                  has_economy_section=has_economy_section)); return cid
     def add_membership(self, cid, aid, frame_label=None):
         self.memberships.append((cid, aid))
 
@@ -132,3 +136,35 @@ def test_parse_groups_rejects_non_partition():
     assert cluster_stage._parse_groups('{"groups": [[0]]}', 2) is None     # missing index 1
     assert cluster_stage._parse_groups('{"groups": [[0,1],[1]]}', 2) is None  # dup index
     assert cluster_stage._parse_groups('{"groups": [[0],[1]]}', 2) == [[0], [1]]
+
+
+def test_run_sets_curated_and_economy_flags():
+    from geoecon.registry import Source
+    sources = [
+        Source(id="reg_named_econ", institution="N", tier=2, fetch_type="rss",
+               url="https://n", curated=True, section="economy"),
+        Source(id="reg_named_gen", institution="G", tier=2, fetch_type="rss",
+               url="https://g", curated=True, section=None),
+        Source(id="reg_plain", institution="P", tier=2, fetch_type="rss",
+               url="https://p", curated=False, section=None),
+    ]
+    # SA cluster: one curated-economy member -> both flags true (one event)
+    sa = [_art(1, "Saudi budget", country="SA", score=0.9, registry_id="reg_named_econ"),
+          _art(2, "Saudi budget detail", country="SA", score=0.5, registry_id="reg_plain")]
+    # EG cluster: a curated general member -> has_curated true, economy false
+    eg = [_art(3, "Egypt pound", country="EG", score=0.6, registry_id="reg_named_gen")]
+    repo = FakeRepo(sa + eg)
+    llm = _LLM(['{"groups": [[0, 1]]}'])   # SA grouped; EG singleton
+    cluster_stage.run(_CFG, repo, 1, llm, sources=sources)
+    sac = [c for c in repo.clusters if c["count"] == 2][0]
+    egc = [c for c in repo.clusters if c["count"] == 1][0]
+    assert sac["has_curated"] is True and sac["has_economy_section"] is True
+    assert egc["has_curated"] is True and egc["has_economy_section"] is False
+
+
+def test_run_flags_false_for_gdelt_only_cluster():
+    arts = [_art(1, "Egypt pound", country="EG", score=0.5)]  # registry_id=None
+    repo = FakeRepo(arts)
+    cluster_stage.run(_CFG, repo, 1, _LLM([]), sources=[])
+    c = repo.clusters[0]
+    assert c["has_curated"] is False and c["has_economy_section"] is False

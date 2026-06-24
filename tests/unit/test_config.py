@@ -97,3 +97,18 @@ def test_output_quality_knob_overrides():
     cfg = Config.from_env({**_ENV, "FIGURES_MAX": "5", "MARKET_DEMOTE": "false"})
     assert cfg.figures_max == 5
     assert cfg.market_demote is False
+
+
+def test_curated_preference_defaults():
+    cfg = Config.from_env(dict(_ENV))
+    assert cfg.curated_preference is True
+    assert cfg.curated_boost == 0.15
+    assert cfg.economy_section_boost == 0.10
+
+
+def test_curated_preference_env_overrides():
+    cfg = Config.from_env({**_ENV, "CURATED_PREFERENCE": "false",
+                           "CURATED_BOOST": "0.3", "ECONOMY_SECTION_BOOST": "0.2"})
+    assert cfg.curated_preference is False
+    assert cfg.curated_boost == 0.3
+    assert cfg.economy_section_boost == 0.2

@@ -41,6 +41,10 @@ class Config:
     # Output-quality knobs (2026-06-23 refinement). Both reversible via env.
     figures_max: int = 8          # FIGURES_MAX; cap per-story figures line (0 => no cap)
     market_demote: bool = True    # MARKET_DEMOTE; rank US/global market roundups last
+    # Curated-source ranking nudge (Unit B). Reversible via env; master flag default ON.
+    curated_preference: bool = True       # CURATED_PREFERENCE
+    curated_boost: float = 0.15           # CURATED_BOOST
+    economy_section_boost: float = 0.10   # ECONOMY_SECTION_BOOST
     limit: int | None = None
 
     @classmethod
@@ -79,5 +83,8 @@ class Config:
             rank_by_corroboration=env.get("RANK_BY_CORROBORATION", "false").lower() == "true",
             figures_max=int(env.get("FIGURES_MAX", "8")),
             market_demote=env.get("MARKET_DEMOTE", "true").lower() == "true",
+            curated_preference=env.get("CURATED_PREFERENCE", "true").lower() == "true",
+            curated_boost=float(env.get("CURATED_BOOST", "0.15")),
+            economy_section_boost=float(env.get("ECONOMY_SECTION_BOOST", "0.10")),
             limit=int(limit) if limit else None,
         )

@@ -112,3 +112,9 @@ def test_curated_preference_env_overrides():
     assert cfg.curated_preference is False
     assert cfg.curated_boost == 0.3
     assert cfg.economy_section_boost == 0.2
+
+
+def test_country_cap_default_and_override():
+    assert Config.from_env(dict(_ENV)).country_cap == 4
+    assert Config.from_env({**_ENV, "COUNTRY_CAP": "0"}).country_cap == 0
+    assert Config.from_env({**_ENV, "COUNTRY_CAP": "3"}).country_cap == 3

@@ -45,6 +45,7 @@ class Config:
     curated_preference: bool = True       # CURATED_PREFERENCE
     curated_boost: float = 0.15           # CURATED_BOOST
     economy_section_boost: float = 0.10   # ECONOMY_SECTION_BOOST
+    country_cap: int = 4                   # COUNTRY_CAP; max records per country per region (0 disables)
     limit: int | None = None
 
     @classmethod
@@ -86,5 +87,6 @@ class Config:
             curated_preference=env.get("CURATED_PREFERENCE", "true").lower() == "true",
             curated_boost=float(env.get("CURATED_BOOST", "0.15")),
             economy_section_boost=float(env.get("ECONOMY_SECTION_BOOST", "0.10")),
+            country_cap=int(env.get("COUNTRY_CAP", "4")),
             limit=int(limit) if limit else None,
         )

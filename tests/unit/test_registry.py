@@ -93,3 +93,28 @@ def test_real_registry_loads_and_validates():
     assert len({s.id for s in srcs}) == 48  # ids unique
     assert all(s.tier in registry.VALID_TIERS for s in srcs)
     assert all(s.fetch_type in registry.VALID_FETCH_TYPES for s in srcs)
+
+
+def test_curated_and_section_default_and_parse(tmp_path):
+    text = """
+sources:
+  - id: plain
+    institution: P
+    tier: 2
+    fetch_type: rss
+    url: "https://p"
+  - id: flagged
+    institution: F
+    tier: 2
+    fetch_type: rss
+    url: "https://f"
+    curated: true
+    section: economy
+"""
+    by_id = {s.id: s for s in registry.load_sources(_write(tmp_path, text))}
+    # defaults when omitted
+    assert by_id["plain"].curated is False
+    assert by_id["plain"].section is None
+    # parsed when present
+    assert by_id["flagged"].curated is True
+    assert by_id["flagged"].section == "economy"

@@ -44,6 +44,8 @@ class Source:
     notes: str | None = None
     verified: str | None = None
     status: str | None = None         # live | needs_review | dead
+    curated: bool = False             # user-named outlet: eligible for the ranking nudge
+    section: str | None = None        # "economy" => economy-desk feed; else None/general
 
     @property
     def is_fetchable(self) -> bool:

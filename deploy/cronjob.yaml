@@ -24,7 +24,7 @@ spec:
             seccompProfile: { type: RuntimeDefault }
           containers:
             - name: pipeline
-              image: jalalhussein/geoecon-pipeline:20260623-3
+              image: jalalhussein/geoecon-pipeline:20260624-1
               args: ["run"]
               securityContext:
                 allowPrivilegeEscalation: false
@@ -45,6 +45,11 @@ spec:
                 # Change 4 ranking switch stays OFF until live calibration (see memory).
                 - name: RANK_BY_CORROBORATION
                   value: "false"
+                # Curated named-source nudge (economy-first + curated preference).
+                # Shipped ON from 20260624-1; small additive boosts, market-demote still wins.
+                # Set "false" to revert ranking to byte-identical prior behavior.
+                - name: CURATED_PREFERENCE
+                  value: "true"
               resources:
                 requests: { cpu: "1", memory: "1Gi" }
                 limits: { cpu: "2", memory: "2Gi" }

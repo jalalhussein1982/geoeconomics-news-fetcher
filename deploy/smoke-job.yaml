@@ -36,7 +36,7 @@ spec:
         seccompProfile: { type: RuntimeDefault }
       containers:
         - name: pipeline
-          image: jalalhussein/geoecon-pipeline:20260623-3
+          image: jalalhussein/geoecon-pipeline:20260624-1
           args: ["run"]
           securityContext:
             allowPrivilegeEscalation: false
@@ -54,6 +54,9 @@ spec:
               value: "/app/config/sources.yaml"
             - name: RANK_BY_CORROBORATION
               value: "false"
+            # Curated named-source nudge — shipped ON from 20260624-1 (see cronjob.yaml).
+            - name: CURATED_PREFERENCE
+              value: "true"
             # --- smoke-only overrides ---
             - name: DRY_RUN
               value: "true"          # render + archive, but do NOT send email

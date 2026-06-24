@@ -287,13 +287,15 @@ Run:
 ```bash
 .venv/bin/python -c "
 from geoecon import regions
-items=[('r','IR',None,100-i) for i in range(9)]+[('r','QA',None,5),('r','AE',None,4),('r','LE',None,3),('r','KU',None,2),('r','BA',None,1)]
-g=regions.top_per_bucket(items, country_of=lambda t:t[1], score_of=lambda t:t[3], n=12, active=('middle_east',), country_cap=4)
-me=g['middle_east']; print('total',len(me),'IR',sum(1 for t in me if t[1]=='IR'))
+# 9 IR + 8 distinct middle_east others so supply exists for diversification
+items=[('r','IR',None,100-i) for i in range(9)]+[('r',c,None,20-j) for j,c in enumerate(['QA','AE','LE','KU','BA','SA','JO','SY'])]
+for cap in (0,4):
+    me=regions.top_per_bucket(items, country_of=lambda t:t[1], score_of=lambda t:t[3], n=12, active=('middle_east',), country_cap=cap)['middle_east']
+    print(f'cap={cap}: total {len(me)} IR {sum(1 for t in me if t[1]==\"IR\")} distinct {len(set(t[1] for t in me))}')
 "
 ```
 
-Expected: `total 12 IR 4` (with cap) — confirms a dominant country is capped at 4 when other supply exists.
+Expected: `cap=0: total 12 IR 9 distinct 4` then `cap=4: total 12 IR 4 distinct 9` — the cap takes the region from 4 distinct countries to 9 when supply exists.
 
 ---
 

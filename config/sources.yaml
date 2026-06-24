@@ -800,9 +800,10 @@ sources:
     state_alignment: null
     reliability: degraded
     notes: >-
-      DEGRADED first-party RSS. Probe arc outbound feeds. If no first-party feed, Reuters coverage still arrives via GDELT firehose — do NOT scrape behind paywall. Critical strong-lang corroborator for Iran/Turkey events. | Task0(2026-06-23): robots.txt disallows our UA — scraping not permitted; feed-of-links/manual only (ToS).
+      DEGRADED first-party RSS. Probe arc outbound feeds. If no first-party feed, Reuters coverage still arrives via GDELT firehose — do NOT scrape behind paywall. Critical strong-lang corroborator for Iran/Turkey events. | Task0(2026-06-23): robots.txt disallows our UA — scraping not permitted; feed-of-links/manual only (ToS). Bot-gated (DataDome); needs headless. Parked until headless lands.
     verified: "2026-06-23"
     status: needs_review
+    curated: true
 
   - id: wire_aa_anadolu
     country: null
@@ -893,6 +894,7 @@ sources:
       Qatari-funded — STATE_ALIGNMENT=QA. Arabic desk (deeper than English). Strong on Gulf, Levant, sanctions framing. NOT independent of Qatar-aligned sources. Known historic RSS at /xml/rss/all.xml (probe). | Task0(2026-06-23): RSS/Atom feed found and validated (>=1 entry).
     verified: "2026-06-23"
     status: live
+    curated: true
 
   - id: reg_alarabiya_ar
     country: null
@@ -1129,3 +1131,400 @@ sources:
       ACTOR-KEYED. China BRI/port/lithium/lending events in MENA+LatAm — the defining geoeconomics of the decade, invisible to in-country financial feeds. state_alignment=CN (carries Chinese framing). EN mirror partial/ DEGRADED; pair with wire corroboration. Consider AIIB/CDB in expansion. | Task0(2026-06-23): no feed; served HTML JS-rendered/thin (article-links~20); selector needs headless capture.
     verified: "2026-06-23"
     status: needs_review
+
+  # --- Curated named outlets (added 2026-06-24) ---------------------------------
+  - id: reg_aljazeera_en
+    country: null
+    country_fips: null
+    bucket: middle_east
+    institution: "Al Jazeera (English)"
+    tier: 2
+    origin_class: [macro, trade, energy, fiscal, monetary, sanctions, investment]
+    fetch_type: rss
+    url: "https://www.aljazeera.com/economy/"
+    feed_url: https://www.aljazeera.com/xml/rss/all.xml
+    probe_paths: []
+    extract_hint: null
+    lang: en
+    ownership: state_linked
+    state_alignment: QA
+    reliability: high
+    notes: "Qatari-funded — state_alignment=QA. Site-wide RSS (no economy-only feed); gate does precision. English desk."
+    verified: "2026-06-24"
+    status: live
+    curated: true
+    section: null
+
+  - id: reg_arab_news_econ
+    country: null
+    country_fips: null
+    bucket: middle_east
+    institution: "Arab News (Business & Economy)"
+    tier: 2
+    origin_class: [macro, trade, energy, investment, monetary, fiscal]
+    fetch_type: rss
+    url: "https://www.arabnews.com/economy"
+    feed_url: https://www.arabnews.com/cat/4/rss.xml
+    probe_paths: []
+    extract_hint: null
+    lang: en
+    ownership: state_linked
+    state_alignment: SA
+    reliability: high
+    notes: "Saudi-owned — state_alignment=SA. Business & Economy category feed."
+    verified: "2026-06-24"
+    status: live
+    curated: true
+    section: economy
+
+  - id: reg_arab_news
+    country: null
+    country_fips: null
+    bucket: middle_east
+    institution: "Arab News (general)"
+    tier: 2
+    origin_class: [macro, trade, energy, investment, monetary, fiscal]
+    fetch_type: rss
+    url: "https://www.arabnews.com/"
+    feed_url: https://www.arabnews.com/rss.xml
+    probe_paths: []
+    extract_hint: null
+    lang: en
+    ownership: state_linked
+    state_alignment: SA
+    reliability: high
+    notes: "General feed; politically-framed economy stories survive the gate."
+    verified: "2026-06-24"
+    status: live
+    curated: true
+    section: null
+
+  - id: reg_milenio_mx
+    country: MX
+    country_fips: MX
+    bucket: latam
+    institution: "Milenio (Mexico)"
+    tier: 2
+    origin_class: [macro, monetary, fiscal, trade, investment, energy]
+    fetch_type: sitemap
+    url: "https://www.milenio.com/"
+    feed_url: https://www.milenio.com/sitemap/sitemap-articles-index.xml
+    probe_paths: []
+    extract_hint: null
+    lang: es
+    ownership: private
+    state_alignment: null
+    reliability: high
+    notes: "No RSS; Google-News XML sitemap index. Verified URL from robots.txt: /sitemap/sitemap-articles-index.xml."
+    verified: "2026-06-24"
+    status: live
+    curated: true
+    section: null
+
+  - id: reg_lanacion_ar_econ
+    country: AR
+    country_fips: AR
+    bucket: latam
+    institution: "La Nación (Argentina — Economía)"
+    tier: 2
+    origin_class: [macro, monetary, fiscal, trade, investment]
+    fetch_type: rss
+    url: "https://www.lanacion.com.ar/economia/"
+    feed_url: "https://www.lanacion.com.ar/arc/outboundfeeds/rss/category/economia/?outputType=xml"
+    probe_paths: []
+    extract_hint: null
+    lang: es
+    ownership: private
+    state_alignment: null
+    reliability: high
+    notes: "Arc CMS economy-section feed."
+    verified: "2026-06-24"
+    status: live
+    curated: true
+    section: economy
+
+  - id: reg_lanacion_ar
+    country: AR
+    country_fips: AR
+    bucket: latam
+    institution: "La Nación (Argentina — general)"
+    tier: 2
+    origin_class: [macro, monetary, fiscal, trade, investment]
+    fetch_type: rss
+    url: "https://www.lanacion.com.ar/"
+    feed_url: "https://www.lanacion.com.ar/arc/outboundfeeds/rss/?outputType=xml"
+    probe_paths: []
+    extract_hint: null
+    lang: es
+    ownership: private
+    state_alignment: null
+    reliability: high
+    notes: "General feed; gate filters to economy×geopolitics."
+    verified: "2026-06-24"
+    status: live
+    curated: true
+    section: null
+
+  - id: reg_clarin_ar_econ
+    country: AR
+    country_fips: AR
+    bucket: latam
+    institution: "Clarín (Argentina — Economía)"
+    tier: 2
+    origin_class: [macro, monetary, fiscal, trade, investment]
+    fetch_type: rss
+    url: "https://www.clarin.com/economia/"
+    feed_url: "https://www.clarin.com/rss/economia/"
+    probe_paths: []
+    extract_hint: null
+    lang: es
+    ownership: private
+    state_alignment: null
+    reliability: high
+    notes: "Economy-section feed. Needs browser UA (handled by fetcher)."
+    verified: "2026-06-24"
+    status: live
+    curated: true
+    section: economy
+
+  - id: reg_clarin_ar
+    country: AR
+    country_fips: AR
+    bucket: latam
+    institution: "Clarín (Argentina — general)"
+    tier: 2
+    origin_class: [macro, monetary, fiscal, trade, investment]
+    fetch_type: rss
+    url: "https://www.clarin.com/"
+    feed_url: "https://www.clarin.com/rss/lo-ultimo/"
+    probe_paths: []
+    extract_hint: null
+    lang: es
+    ownership: private
+    state_alignment: null
+    reliability: high
+    notes: "Latest-news feed. Needs browser UA."
+    verified: "2026-06-24"
+    status: live
+    curated: true
+    section: null
+
+  - id: reg_laizquierda_ar
+    country: AR
+    country_fips: AR
+    bucket: latam
+    institution: "La Izquierda Diario (Argentina)"
+    tier: 2
+    origin_class: [macro, fiscal, trade]
+    fetch_type: unverified
+    url: "https://www.laizquierdadiario.com/"
+    feed_url: null
+    probe_paths: ["/?page=backend", "/sitemap_news.xml"]
+    extract_hint: null
+    lang: es
+    ownership: private
+    state_alignment: null
+    reliability: degraded
+    notes: "Cloudflare interactive JS challenge on every path; needs headless. Parked."
+    verified: "2026-06-24"
+    status: needs_review
+    curated: true
+    section: null
+
+  - id: reg_larazon_bo
+    country: BL
+    country_fips: BL
+    bucket: latam
+    institution: "La Razón (Bolivia)"
+    tier: 2
+    origin_class: [macro, monetary, fiscal, energy, trade]
+    fetch_type: rss
+    url: "https://larazon.bo/"
+    feed_url: https://larazon.bo/feed/
+    probe_paths: []
+    extract_hint: null
+    lang: es
+    ownership: private
+    state_alignment: null
+    reliability: high
+    notes: "WordPress feed. Needs browser UA; feed <link> uses an internal IP — fetcher rewrites to public host."
+    verified: "2026-06-24"
+    status: live
+    curated: true
+    section: null
+
+  - id: reg_anfibia_ar
+    country: AR
+    country_fips: AR
+    bucket: latam
+    institution: "Revista Anfibia (Argentina)"
+    tier: 2
+    origin_class: [macro, fiscal, trade]
+    fetch_type: rss
+    url: "https://www.revistaanfibia.com/"
+    feed_url: https://www.revistaanfibia.com/feed/
+    probe_paths: []
+    extract_hint: null
+    lang: es
+    ownership: private
+    state_alignment: null
+    reliability: degraded
+    notes: "Long-form magazine; low geoeconomic yield (accepted). WordPress feed."
+    verified: "2026-06-24"
+    status: live
+    curated: true
+    section: null
+
+  - id: reg_vientosur
+    country: null
+    country_fips: null
+    bucket: latam
+    institution: "Viento Sur"
+    tier: 2
+    origin_class: [macro, fiscal, trade]
+    fetch_type: rss
+    url: "https://vientosur.info/"
+    feed_url: https://vientosur.info/feed/
+    probe_paths: []
+    extract_hint: null
+    lang: es
+    ownership: private
+    state_alignment: null
+    reliability: degraded
+    notes: "Analysis outlet; low geoeconomic yield (accepted). WordPress feed."
+    verified: "2026-06-24"
+    status: live
+    curated: true
+    section: null
+
+  - id: reg_elpais_america_econ
+    country: null
+    country_fips: null
+    bucket: latam
+    institution: "El País América (Economía)"
+    tier: 2
+    origin_class: [macro, monetary, fiscal, trade, investment, energy]
+    fetch_type: rss
+    url: "https://elpais.com/economia/"
+    feed_url: "https://feeds.elpais.com/mrss-s/pages/ep/site/elpais.com/section/economia/portada"
+    probe_paths: []
+    extract_hint: null
+    lang: es
+    ownership: private
+    state_alignment: null
+    reliability: high
+    notes: "MRSS economy feed. Needs browser UA."
+    verified: "2026-06-24"
+    status: live
+    curated: true
+    section: economy
+
+  - id: reg_elpais_america
+    country: null
+    country_fips: null
+    bucket: latam
+    institution: "El País América (portada)"
+    tier: 2
+    origin_class: [macro, monetary, fiscal, trade, investment]
+    fetch_type: rss
+    url: "https://elpais.com/america/"
+    feed_url: "https://feeds.elpais.com/mrss-s/pages/ep/site/elpais.com/section/america/portada"
+    probe_paths: []
+    extract_hint: null
+    lang: es
+    ownership: private
+    state_alignment: null
+    reliability: high
+    notes: "America-edition front feed. Needs browser UA."
+    verified: "2026-06-24"
+    status: live
+    curated: true
+    section: null
+
+  - id: reg_eluniverso_ec
+    country: EC
+    country_fips: EC
+    bucket: latam
+    institution: "El Universo (Ecuador)"
+    tier: 2
+    origin_class: [macro, monetary, fiscal, trade, energy, investment]
+    fetch_type: rss
+    url: "https://www.eluniverso.com/"
+    feed_url: "https://www.eluniverso.com/arc/outboundfeeds/rss/?outputType=xml"
+    probe_paths: []
+    extract_hint: null
+    lang: es
+    ownership: private
+    state_alignment: null
+    reliability: high
+    notes: "Arc CMS general feed."
+    verified: "2026-06-24"
+    status: live
+    curated: true
+    section: null
+
+  - id: reg_eluniverso_ec_econ
+    country: EC
+    country_fips: EC
+    bucket: latam
+    institution: "El Universo (Ecuador — Economía)"
+    tier: 2
+    origin_class: [macro, monetary, fiscal, trade, energy, investment]
+    fetch_type: rss
+    url: "https://www.eluniverso.com/economia/"
+    feed_url: "https://www.eluniverso.com/arc/outboundfeeds/rss/category/economia/?outputType=xml"
+    probe_paths: []
+    extract_hint: null
+    lang: es
+    ownership: private
+    state_alignment: null
+    reliability: high
+    notes: "Arc CMS economy-section feed. Verified 2026-06-24 (HTTP 200, valid RSS XML)."
+    verified: "2026-06-24"
+    status: live
+    curated: true
+    section: economy
+
+  - id: reg_seul_ar
+    country: AR
+    country_fips: AR
+    bucket: latam
+    institution: "Seúl (Argentina)"
+    tier: 2
+    origin_class: [macro, trade, investment]
+    fetch_type: rss
+    url: "https://seul.ar/"
+    feed_url: https://seul.ar/feed/
+    probe_paths: []
+    extract_hint: null
+    lang: es
+    ownership: private
+    state_alignment: null
+    reliability: degraded
+    notes: "Niche outlet; low geoeconomic yield (accepted). WordPress feed; needs browser UA."
+    verified: "2026-06-24"
+    status: live
+    curated: true
+    section: null
+
+  - id: reg_lapoliticaonline_ar
+    country: AR
+    country_fips: AR
+    bucket: latam
+    institution: "La Política Online (Argentina — Economía)"
+    tier: 2
+    origin_class: [macro, monetary, fiscal, trade, investment]
+    fetch_type: rss
+    url: "https://www.lapoliticaonline.com/economia/"
+    feed_url: "https://www.lapoliticaonline.com/files/rss/economia.xml"
+    probe_paths: []
+    extract_hint: null
+    lang: es
+    ownership: private
+    state_alignment: null
+    reliability: high
+    notes: "Economy-section feed (the only feed registered for this outlet)."
+    verified: "2026-06-24"
+    status: live
+    curated: true
+    section: economy

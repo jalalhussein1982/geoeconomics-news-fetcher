@@ -89,8 +89,8 @@ sources:
 def test_real_registry_loads_and_validates():
     """The shipped config/sources.yaml must parse and validate as-is."""
     srcs = registry.load_sources(registry.default_path())
-    assert len(srcs) == 48
-    assert len({s.id for s in srcs}) == 48  # ids unique
+    assert len(srcs) == 66
+    assert len({s.id for s in srcs}) == 66  # ids unique
     assert all(s.tier in registry.VALID_TIERS for s in srcs)
     assert all(s.fetch_type in registry.VALID_FETCH_TYPES for s in srcs)
 

@@ -115,7 +115,7 @@ def test_records_for_buckets_carries_country_and_source(repo):
     repo.upsert_synthesis_record(rid, cid, {"headline_en": "A"}, "ok")
     out = repo.records_for_buckets(rid)
     assert len(out) == 1
-    rec, country, sources, _score = out[0]
+    rec, country, sources, _score, *_ = out[0]
     assert rec.fields["headline_en"] == "A"
     assert country == "EG"
     assert sources == [{"url": "https://reuters.com/x", "domain": "reuters.com"}]
@@ -166,7 +166,7 @@ def test_records_for_buckets_aggregates_multiple_articles(repo):
     repo.upsert_synthesis_record(rid, cid, {"headline_en": "A"}, "ok")
     out = repo.records_for_buckets(rid)
     assert len(out) == 1                       # one tuple per record
-    _rec, country, sources, _score = out[0]
+    _rec, country, sources, _score, *_ = out[0]
     assert country == "EG"
     assert {s["url"] for s in sources} == {"https://a.com/x", "https://b.com/y"}
 
@@ -179,7 +179,7 @@ def test_records_for_buckets_no_member_article_has_empty_sources(repo):
     repo.upsert_synthesis_record(rid, cid, {"headline_en": "A"}, "ok")
     out = repo.records_for_buckets(rid)
     assert len(out) == 1
-    _rec, country, sources, _score = out[0]
+    _rec, country, sources, _score, *_ = out[0]
     assert country == "EG" and sources == []
 
 
@@ -285,6 +285,37 @@ def test_update_extraction_sets_title_and_upsert_gate(repo):
     a = {x.article_id: x for x in repo.articles_for_run(rid)}[aid]
     assert a.gate_geoeconomic is True and abs(a.gate_score - 0.77) < 1e-6
     assert a.gate_country == "Egypt" and a.country_fips == "EG"
+
+
+@requires_db
+def test_records_for_buckets_carries_curated_flags(repo):
+    ws, we, sf = _win()
+    rid = repo.create_run(ws, we, sf, "deepseek-v3.2", "task_a_cov")
+    aid = repo.insert_article(rid, source_url="u", url_hash="h", domain="d",
+                              region="MENA", gkg_themes=[], title="t")
+    cid = repo.insert_cluster(rid, "fp1", "MENA", ["en"], 1,
+                              has_curated=True, has_economy_section=True)
+    repo.add_membership(cid, aid)
+    repo.upsert_synthesis_record(rid, cid, {"headline_en": "A"}, "ok")
+    recs = repo.records_for_buckets(rid)
+    assert len(recs) == 1
+    rec = recs[0]
+    assert len(rec) == 6
+    assert rec[4] is True   # has_curated
+    assert rec[5] is True   # has_economy_section
+
+
+@requires_db
+def test_records_for_buckets_flags_default_false(repo):
+    ws, we, sf = _win()
+    rid = repo.create_run(ws, we, sf, "deepseek-v3.2", "task_a_cov")
+    aid = repo.insert_article(rid, source_url="u", url_hash="h", domain="d",
+                              region="MENA", gkg_themes=[], title="t")
+    cid = repo.insert_cluster(rid, "fp1", "MENA", ["en"], 1)  # no flags passed
+    repo.add_membership(cid, aid)
+    repo.upsert_synthesis_record(rid, cid, {"headline_en": "A"}, "ok")
+    rec = repo.records_for_buckets(rid)[0]
+    assert rec[4] is False and rec[5] is False
 
 
 @requires_db

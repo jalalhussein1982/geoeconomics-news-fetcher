@@ -113,16 +113,17 @@ class Repo:
     def insert_cluster(self, run_id, event_fingerprint, region, languages, article_count,
                        framing_divergent=False, country_fips=None, gate_score=None,
                        tier_min=None, has_primary=None, distinct_state_alignments=None,
-                       source_count=None, corroboration_score=None) -> int:
+                       source_count=None, corroboration_score=None,
+                       has_curated=False, has_economy_section=False) -> int:
         return self.conn.execute(
             """INSERT INTO clusters(run_id, event_fingerprint, region, country_fips,
                  languages, article_count, framing_divergent, gate_score,
                  tier_min, has_primary, distinct_state_alignments, source_count,
-                 corroboration_score)
-               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING cluster_id""",
+                 corroboration_score, has_curated, has_economy_section)
+               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING cluster_id""",
             (run_id, event_fingerprint, region, country_fips, languages, article_count,
              framing_divergent, gate_score, tier_min, has_primary, distinct_state_alignments,
-             source_count, corroboration_score)).fetchone()[0]
+             source_count, corroboration_score, has_curated, has_economy_section)).fetchone()[0]
 
     def add_membership(self, cluster_id, article_id, frame_label=None):
         self.conn.execute(
@@ -192,7 +193,7 @@ class Repo:
         return out
 
     def records_for_buckets(self, run_id, rank_by_corroboration=False
-                            ) -> list[tuple[SynthesisRecord, str | None, list[dict], float | None]]:
+                            ) -> list[tuple[SynthesisRecord, str | None, list[dict], float | None, bool, bool]]:
         """OK records with their cluster country_fips, verified source link(s), and the
         RANKING score (4th element).
 
@@ -207,7 +208,7 @@ class Repo:
                  s.headline_original_lang, s.what_happened_en, s.geoeconomic_significance_en,
                  s.geoeconomic_vector, s.entities, s.key_figures, s.framing_divergence,
                  s.sources, s.is_headline_only, c.country_fips, c.gate_score, a.source_url,
-                 a.domain, c.corroboration_score
+                 a.domain, c.corroboration_score, c.has_curated, c.has_economy_section
                FROM synthesis_records s
                JOIN clusters c ON c.cluster_id = s.cluster_id
                LEFT JOIN cluster_articles ca ON ca.cluster_id = c.cluster_id
@@ -228,7 +229,7 @@ class Repo:
                             "sources": r[11]},
                     quality_flag="ok", is_headline_only=r[12])
                 rank_score = r[17] if rank_by_corroboration else r[14]
-                by_id[rec_id] = [rec, r[13], [], rank_score]
+                by_id[rec_id] = [rec, r[13], [], rank_score, bool(r[18]), bool(r[19])]
                 order.append(rec_id)
             if r[15]:  # source_url present
                 src = {"url": r[15], "domain": r[16]}

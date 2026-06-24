@@ -112,7 +112,7 @@ def run(cfg, repo, run_id, date_str, *, stats=None) -> dict:
         if not items:
             continue
         records = []
-        for rec, _country, sources, _score in items:
+        for rec, _country, sources, _score, *_ in items:
             rec.source_links = sources
             prose = " ".join(x for x in (rec.fields.get("what_happened_en"),
                                          rec.fields.get("geoeconomic_significance_en")) if x)

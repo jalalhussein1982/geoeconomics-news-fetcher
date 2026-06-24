@@ -139,6 +139,8 @@ CREATE TABLE clusters (
     distinct_state_alignments INTEGER,                 -- count of distinct state_alignments
     source_count              INTEGER,                 -- member article count
     corroboration_score       REAL,                    -- Change 4: scored from the aggregates above
+    has_curated               BOOLEAN NOT NULL DEFAULT FALSE,  -- any member from a curated named source
+    has_economy_section       BOOLEAN NOT NULL DEFAULT FALSE,  -- any member from a section=economy feed
     languages           TEXT[],                        -- distinct source langs in the cluster
     -- framing-divergence flag set by Stage 2 when intra-cluster framing diverges
     framing_divergent   BOOLEAN NOT NULL DEFAULT false,

@@ -76,10 +76,13 @@ def test_cap_per_country_noop_when_under_cap():
 
 
 def test_top_per_bucket_applies_country_cap():
+    # 9 IR + 8 distinct middle_east others (17 items) so the capped set reaches n=12
+    # WITHOUT backfill -> IR capped at exactly 4.
     score_of = lambda t: t[3]
     items = ([("r", "IR", None, 100 - i) for i in range(9)]
              + [("r", "QA", None, 20), ("r", "AE", None, 19), ("r", "LE", None, 18),
-                ("r", "KU", None, 17), ("r", "BA", None, 16)])
+                ("r", "KU", None, 17), ("r", "BA", None, 16), ("r", "SA", None, 15),
+                ("r", "JO", None, 14), ("r", "SY", None, 13)])
     grouped = regions.top_per_bucket(items, country_of=lambda t: t[1], score_of=score_of,
                                      n=12, active=("middle_east",), country_cap=4)
     me = grouped["middle_east"]

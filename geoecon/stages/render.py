@@ -104,7 +104,8 @@ def run(cfg, repo, run_id, date_str, *, stats=None) -> dict:
     from .. import regions, ranking
     grouped = regions.top_per_bucket(
         repo.records_for_buckets(run_id, cfg.rank_by_corroboration), country_of=lambda t: t[1],
-        score_of=ranking.make_score_of(cfg), n=cfg.region_cap, active=cfg.buckets)
+        score_of=ranking.make_score_of(cfg), n=cfg.region_cap, active=cfg.buckets,
+        country_cap=getattr(cfg, "country_cap", None))
     os.makedirs(cfg.archive_dir, exist_ok=True)
     newsletters = []
     for bucket in cfg.buckets:

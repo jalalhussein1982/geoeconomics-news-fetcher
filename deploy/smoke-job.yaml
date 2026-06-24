@@ -36,7 +36,7 @@ spec:
         seccompProfile: { type: RuntimeDefault }
       containers:
         - name: pipeline
-          image: jalalhussein/geoecon-pipeline:20260624-1
+          image: jalalhussein/geoecon-pipeline:20260624-2
           args: ["run"]
           securityContext:
             allowPrivilegeEscalation: false
@@ -57,6 +57,9 @@ spec:
             # Curated named-source nudge — shipped ON from 20260624-1 (see cronjob.yaml).
             - name: CURATED_PREFERENCE
               value: "true"
+            # Per-country slot cap (max 4 per country per region) — ON from 20260624-2.
+            - name: COUNTRY_CAP
+              value: "4"
             # --- smoke-only overrides ---
             - name: DRY_RUN
               value: "true"          # render + archive, but do NOT send email

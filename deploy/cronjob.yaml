@@ -24,7 +24,7 @@ spec:
             seccompProfile: { type: RuntimeDefault }
           containers:
             - name: pipeline
-              image: jalalhussein/geoecon-pipeline:20260624-1
+              image: jalalhussein/geoecon-pipeline:20260624-2
               args: ["run"]
               securityContext:
                 allowPrivilegeEscalation: false
@@ -50,6 +50,11 @@ spec:
                 # Set "false" to revert ranking to byte-identical prior behavior.
                 - name: CURATED_PREFERENCE
                   value: "true"
+                # Per-country slot cap: no country takes >4 of a region's 12 slots
+                # (backfills if supply is thin). Shipped ON from 20260624-2.
+                # Set "0" to disable -> ranking byte-identical to pre-cap.
+                - name: COUNTRY_CAP
+                  value: "4"
               resources:
                 requests: { cpu: "1", memory: "1Gi" }
                 limits: { cpu: "2", memory: "2Gi" }

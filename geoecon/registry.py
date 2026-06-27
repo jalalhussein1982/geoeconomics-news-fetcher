@@ -18,6 +18,7 @@ log = logging.getLogger("geoecon.registry")
 
 VALID_FETCH_TYPES = {"rss", "api", "scrape", "sitemap", "dead", "unverified"}
 VALID_TIERS = {0, 1, 2}
+VALID_RENDER = {None, "firecrawl"}
 
 # fetch_types that cannot be fetched yet — skipped at runtime by the stage.
 SKIP_FETCH_TYPES = {"unverified", "dead"}
@@ -46,6 +47,7 @@ class Source:
     status: str | None = None         # live | needs_review | dead
     curated: bool = False             # user-named outlet: eligible for the ranking nudge
     section: str | None = None        # "economy" => economy-desk feed; else None/general
+    render: str | None = None         # "firecrawl" => fetch JS-rendered DOM before scraping
 
     @property
     def is_fetchable(self) -> bool:
@@ -94,6 +96,8 @@ def load_sources(path: str | Path | None = None) -> list[Source]:
             raise ValueError(f"{sid}: tier {src.tier!r} not in {sorted(VALID_TIERS)}")
         if src.fetch_type not in VALID_FETCH_TYPES:
             raise ValueError(f"{sid}: fetch_type {src.fetch_type!r} not in {sorted(VALID_FETCH_TYPES)}")
+        if src.render not in VALID_RENDER:
+            raise ValueError(f"{sid}: render {src.render!r} not in {sorted(x for x in VALID_RENDER if x)}")
         sources.append(src)
 
     return sources

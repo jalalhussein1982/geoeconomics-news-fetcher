@@ -121,6 +121,20 @@ def test_scrape_no_hint_returns_empty():
     assert f.discover(_src(fetch_type="scrape", extract_hint=None)) == []
 
 
+def test_scrape_sets_ts_from_date_in_url():
+    # Egypt-style path with date + time; IMF-style with date only.
+    html = (
+        '<a class="h" href="https://x.org/news/2026/06/07/08/19/reserves">A</a>'
+        '<a class="h" href="https://x.org/news/articles/2026/06/22/aid-falling">B</a>'
+        '<a class="h" href="https://x.org/about/team">C</a>'  # no date -> None
+    )
+    f = ScrapeFetcher(fetch=lambda u: html)
+    items = f.discover(_src(fetch_type="scrape", extract_hint="a.h", url="https://x.org/"))
+    assert items[0].ts == datetime(2026, 6, 7, 8, 19, tzinfo=timezone.utc)
+    assert items[1].ts == datetime(2026, 6, 22, 0, 0, tzinfo=timezone.utc)
+    assert items[2].ts is None
+
+
 # ---- sitemap ----
 
 _URLSET = """<?xml version="1.0" encoding="UTF-8"?>

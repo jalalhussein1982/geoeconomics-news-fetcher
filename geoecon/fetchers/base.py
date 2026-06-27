@@ -34,6 +34,11 @@ def get_fetcher(source) -> Fetcher:
         return RssFetcher()
     if ft == "scrape":
         from .scrape import ScrapeFetcher
+        # JS-rendered sources (render: firecrawl) get the rendered DOM via
+        # Firecrawl, then the same extract_hint selector logic applies.
+        if getattr(source, "render", None) == "firecrawl":
+            from .firecrawl import firecrawl_fetch
+            return ScrapeFetcher(fetch=firecrawl_fetch)
         return ScrapeFetcher()
     if ft == "sitemap":
         from .sitemap import SitemapFetcher

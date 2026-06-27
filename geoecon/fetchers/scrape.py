@@ -8,6 +8,8 @@ and skipped by the stage — they have no usable `extract_hint` here.
 from __future__ import annotations
 
 import logging
+import re
+from datetime import datetime, timezone
 from urllib.parse import urljoin
 
 import requests
@@ -17,6 +19,23 @@ from .base import DiscoveredItem
 from .http import BROWSER_UA
 
 log = logging.getLogger("geoecon.fetchers.scrape")
+
+# Many news/press URLs embed the publish date as `/YYYY/MM/DD/` (optionally
+# `/HH/MM/`), e.g. CBE `/news/2026/06/07/08/19/...` and IMF `/articles/2026/06/22/...`.
+# Parsing it lets the registry stage window scrape items by recency instead of
+# re-ingesting the whole listing every run (the fetcher otherwise has no ts).
+_URL_DATE_RX = re.compile(r"/(20\d\d)/(\d{2})/(\d{2})(?:/(\d{2})/(\d{2}))?(?:/|$)")
+
+
+def _date_from_url(url: str) -> datetime | None:
+    m = _URL_DATE_RX.search(url)
+    if not m:
+        return None
+    y, mo, d, hh, mm = m.groups()
+    try:
+        return datetime(int(y), int(mo), int(d), int(hh or 0), int(mm or 0), tzinfo=timezone.utc)
+    except ValueError:
+        return None
 
 
 def _default_fetch(url: str) -> str | None:
@@ -57,5 +76,6 @@ class ScrapeFetcher:
                 continue
             seen.add(href)
             title = " ".join(el.text_content().split()) or None
-            items.append(DiscoveredItem(url=href, title=title, source_lang=source.lang))
+            items.append(DiscoveredItem(url=href, title=title, ts=_date_from_url(href),
+                                        source_lang=source.lang))
         return items

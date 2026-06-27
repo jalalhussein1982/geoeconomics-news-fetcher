@@ -278,18 +278,19 @@ sources:
     tier: 0
     origin_class: [monetary, macro]
     fetch_type: scrape
+    render: firecrawl
     url: "https://www.cbe.org.eg/en/news-publications/news"
     feed_url: null
     probe_paths: ["/ar/news-publications/news", "/sitemap.xml", "/rss", "/feed"]
-    extract_hint: null
+    extract_hint: 'a[href*="/news-publications/news/2"]'
     lang: ar
     ownership: state
     state_alignment: EG
     reliability: high
     notes: >-
-      HIGH-SALIENCE: EGP devaluations, IMF-program rate moves are core daily events. Arabic-first; EN mirror. Egypt dual-buckets ME + NA. | Task0(2026-06-23): no feed; served HTML JS-rendered/thin (article-links~0); selector needs headless capture.
-    verified: "2026-06-23"
-    status: needs_review
+      HIGH-SALIENCE: EGP devaluations, IMF-program rate moves are core daily events. Arabic-first; EN mirror. Egypt dual-buckets ME + NA. | Task0(2026-06-23): no feed; served HTML JS-rendered/thin (article-links~0); selector needs headless capture. | 2026-06-27: recovered via render:firecrawl — dated article links /news-publications/news/YYYY/MM/DD/... (16 anchors, ts parsed from URL path).
+    verified: "2026-06-27"
+    status: live
 
   - id: eg_mof
     country: EG
@@ -1057,18 +1058,19 @@ sources:
     tier: 0
     origin_class: [macro, fiscal, monetary]
     fetch_type: scrape
+    render: firecrawl
     url: "https://www.imf.org/en/News"
     feed_url: null
     probe_paths: ["/external/rss/feeds.aspx", "/en/News/rss", "/rss"]
-    extract_hint: null
+    extract_hint: 'a[href*="/news/articles/2"]'
     lang: en
     ownership: multilateral
     state_alignment: null
     reliability: high
     notes: >-
-      ACTOR-KEYED, very high salience: program agreements/reviews for Egypt, Argentina, Pakistan-adjacent, etc. ARE the geoeconomic event. IMF has a long-standing RSS hub (probe external/rss). PRIMARY for program news. | Task0(2026-06-23): no feed; served HTML JS-rendered/thin (article-links~26); selector needs headless capture.
-    verified: "2026-06-23"
-    status: needs_review
+      ACTOR-KEYED, very high salience: program agreements/reviews for Egypt, Argentina, Pakistan-adjacent, etc. ARE the geoeconomic event. IMF has a long-standing RSS hub (probe external/rss). PRIMARY for program news. | Task0(2026-06-23): no feed; served HTML JS-rendered/thin (article-links~26); selector needs headless capture. | 2026-06-27: recovered via render:firecrawl — dated article links /en/news/articles/YYYY/MM/DD/... (PR/CF/TR, 23 anchors, ts parsed from URL path).
+    verified: "2026-06-27"
+    status: live
 
   - id: actor_worldbank
     country: null

@@ -13,9 +13,10 @@
 #   # inspect: runs.metrics in Postgres, the archive HTML on the PVC, and the logs for
 #   #   - migrations 004 + 005 applied
 #   #   - registry_discovered > 0, registry_per_tier
-#   #   - core15_primaries_live: 7 (Egypt CB recovered via render:firecrawl), tier1_live: 2, tier1_held: 4
-#   #   - eg_cb_cbe + actor_imf discovered (Firecrawl; needs FIRECRAWL_API_KEY in geoecon-secrets)
-#   #   - "recall-floor" WARNINGs (wire_ap, wire_reuters_world, wire_efe, actor_china_mofcom)
+#   #   - core15_primaries_live: 7, tier1_live: 3, tier1_held: 3 (wire_efe recovered)
+#   #   - render:firecrawl live: eg_cb_cbe, actor_imf, eg_mof, actor_worldbank, wire_efe,
+#   #     reg_alarabiya_ar (needs FIRECRAWL_API_KEY in geoecon-secrets)
+#   #   - "recall-floor" WARNINGs now just (wire_ap, wire_reuters_world, actor_china_mofcom)
 #   # re-run: kubectl -n hussein-ns delete job geoecon-smoke   (then apply again)
 apiVersion: batch/v1
 kind: Job
@@ -37,7 +38,7 @@ spec:
         seccompProfile: { type: RuntimeDefault }
       containers:
         - name: pipeline
-          image: jalalhussein/geoecon-pipeline:20260627-2
+          image: jalalhussein/geoecon-pipeline:20260627-3
           args: ["run"]
           securityContext:
             allowPrivilegeEscalation: false

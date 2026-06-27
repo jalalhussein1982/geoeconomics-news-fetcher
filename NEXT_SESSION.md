@@ -1,13 +1,13 @@
 # Next Session — Handoff
 
-**State as of 2026-06-23:** The pipeline is **live in production** (CERIT-SC k8s CronJob
-`geoecon-daily`, 07:00 Europe/Prague, image `jalalhussein/geoecon-pipeline:20260623-3`).
-The **registry-driven multi-source redesign (Changes 1–4 + sitemap)** and the **brief
-output-quality refinement** (figures cap, exec-summary trim, market-roundup demotion) are
-both deployed. Latest DRY_RUN smoke (run_id 18) validated the refinement live: figures capped
-at 8 in all 3 regions, North-Africa coverage 4→12 via the registry, no market-demote false
-positives. The first real (email-sending) run on `20260623-3` is the **07:00 Europe/Prague
-run on 2026-06-24** — that's where market-roundup demotion will first act on live US-market noise.
+**State as of 2026-06-27:** The pipeline is **live in production** (CERIT-SC k8s CronJob
+`geoecon-daily`, 07:00 Europe/Prague, image `jalalhussein/geoecon-pipeline:20260627-3`).
+Deployed and running: the registry-driven multi-source redesign (Changes 1–4 + sitemap), the
+brief output-quality refinement (figures cap, exec-summary trim, market-roundup demotion), the
+curated named-source nudge (`CURATED_PREFERENCE`), the per-country slot cap (`COUNTRY_CAP=4`),
+and — newest — the **Firecrawl render path** that recovers JS-rendered/403 dark primaries
+(6 sources now live; see below). Next real email-sending run is the daily 07:00 Europe/Prague
+run, which will be the first brief carrying all 6 Firecrawl-recovered sources.
 
 Working directory: `/Users/jalalhussein/Desktop/geoeconomics_news_fetcher`
 
@@ -22,6 +22,18 @@ Working directory: `/Users/jalalhussein/Desktop/geoeconomics_news_fetcher`
 4. `DEPLOYMENT_ENVIRONMENT.md` + `deploy/` — infra, CronJob, smoke job.
 
 ## What was built recently (all committed + pushed; image deployed)
+- **Firecrawl render path (2026-06-27, images `20260627-2`/`-3`):** JS-rendered/403 dark
+  primaries are recovered by fetching the rendered DOM via Firecrawl, then running the same
+  `extract_hint` selector. `render: firecrawl` per source; key in `geoecon-secrets` as
+  `FIRECRAWL_API_KEY`. New: `fetchers/firecrawl.py`, `Source.render`/`require_date`,
+  `_date_from_url` (parses `/YYYY/MM/DD/` + `/YYYY-MM-DD/`, end-of-day for date-only). **6 live:**
+  `eg_cb_cbe`, `actor_imf`, `actor_worldbank`, `wire_efe`, `reg_alarabiya_ar`, `eg_mof`
+  (Core-15 6→7, tier1_live 2→3). Full detail in `docs/how-it-works/03-registry-redesign.md`
+  → "Firecrawl render path", and agent memory `firecrawl-render-path`.
+- **Per-country slot cap (image `20260624-2`):** `COUNTRY_CAP=4` — no country takes >4 of a
+  region's 12 slots (backfills if thin). `COUNTRY_CAP=0` disables.
+- **Curated named-source nudge (image `20260624-1`):** user-named MENA/LatAm outlets +
+  economy-first ranking; `CURATED_PREFERENCE` (ON), `CURATED_BOOST`, `ECONOMY_SECTION_BOOST`.
 - **Brief output-quality refinement (2026-06-23, image `20260623-3`, branch merged to main):**
   `render.format_figures` now caps the figures line at `FIGURES_MAX` (8) with salience ranking +
   locale/currency-aware numeric dedup; `summary.build_summary_messages` no longer feeds the raw
@@ -44,23 +56,31 @@ Working directory: `/Users/jalalhussein/Desktop/geoeconomics_news_fetcher`
   (added `discovery_registry` to the `stage_runs` CHECK — its absence crashed the first run).
 - 112 unit tests pass; requires_db / requires_net tests are skipped locally.
 
-## Coverage is the objective — and it's gated, not done
-Live primaries are **14/48** (11 rss + 3 sitemap); **Core-15 primary coverage 6/15**. The
-other 34 are JS-rendered government portals. **Spike B ruled out the SharePoint API**;
-headless rendering is the real lever and is unavailable in this environment. Don't read
-"Changes landed + tests pass" as "fetching fixed" — it's "fetching can be fixed once the
-primaries resolve."
+## Coverage — progressing via Firecrawl, not done
+The headless lever (deferred for months as "unavailable") is now in place via Firecrawl, a
+hosted render API — no in-cluster browser. **Core-15 primary coverage 6→7** (adds Egypt);
+6 `render: firecrawl` sources live. The remaining dark sources fall into clear buckets:
 
-## The single follow-up task (live-env: Playwright + DB + LLM proxy + unblocked GDELT)
-In order (mirrored in agent memory `registry-coverage-state` and in 03-registry-redesign.md):
-1. Consolidated re-resolution (`tools/registry_probe.py`, applying the precedence rule) to
-   **headless-resolve the 34 needs_review primaries** (run API + sitemap probes in the same pass).
-2. Re-run Task 0's report; confirm `core15_primaries_live` jumps from 6.
-3. One full live run; **review the brief as a brief**.
-4. Only then flip `RANK_BY_CORROBORATION` ON; review the before/after diff — confirm the
-   clusters that sink below `REGION_CAP` are genuinely the weakly-sourced ones. **That diff
-   review IS the calibration** (a judgment on one real day, not a computed number).
-5. Tune the named weights in `geoecon/corroboration.py`; commit. **Do not flip before step 3.**
+- **Stale-URL (404), ~6** — `ar_cb_bcra` (highest value), `mx_cb_banxico`, `mx_shcp`,
+  `kw_cb_cbk`, `qa_qia`, `gy_bog`. **Cheapest win, no render** — just need the correct
+  current listing URL.
+- **`iq_cb_cbi`** — renders, but ~67 undated, non-chronological links → no safe window.
+  Needs per-row date extraction (or chronological selector + a `max_items` cap).
+- **Parked SPAs** — SharePoint (SAMA/QCB/CBUAE/Tadawul/ADX), WebSphere (Turkey CB), Liferay
+  (Chile CB), Iran CB: render but the article list loads via further AJAX. Need Firecrawl
+  interaction (click/scroll) or a per-site API.
+- **`actor_eu_sanctions`, `actor_opec`** — sites restructured; need the new listing URL.
+- **`wire_reuters_world`** — excluded permanently: ToS forbids scraping.
+
+**Per-source workflow** (probe → pattern → selector → validate → redeploy) is documented in
+`docs/how-it-works/03-registry-redesign.md` → Follow-ups, and agent memory
+`firecrawl-render-path`. Probe scaffolding lives in the session scratchpad (`fc_batch.mjs`).
+
+## Corroboration ranking (independent of coverage)
+`RANK_BY_CORROBORATION` still ships **OFF**. Flip it only after a real run: review the
+before/after brief diff — confirm the clusters that sink below `REGION_CAP` are genuinely the
+weakly-sourced ones (**that diff review IS the calibration**, a judgment on one real day, not
+a computed number) — then tune the weights in `geoecon/corroboration.py`; commit.
 
 ## Open editorial observations (from the run-16 review; not bugs)
 - **Egypt appears in both the Middle East and North Africa briefs** (`EG` maps to both
@@ -74,20 +94,31 @@ In order (mirrored in agent memory `registry-coverage-state` and in 03-registry-
   demotion** (deliberately NOT demoted — oil is Middle-East-relevant signal).
 
 ## Deploy / access notes
-- Cluster reached via `ssh skirit` then kubectl (`$HOME/bin/kubectl`,
-  `KUBECONFIG=$HOME/.kube/kuba-cluster.yaml`, namespace `hussein-ns`). Key auth is flaky
-  (Perun wipe) — fallback is the SSH master-socket method (memory `skirit-access-caveat`).
+- **Cluster access via SSH ControlMaster socket** (worked 2026-06-27; key auth is flaky after
+  Perun wipe). The user opens a master in a 2nd terminal with their own auth:
+  `ssh -M -S ~/.ssh/skirit-cm.sock -fNT skirit`. Then every kubectl runs over it without
+  re-auth: `ssh -S ~/.ssh/skirit-cm.sock skirit 'KUBECONFIG=$HOME/.kube/kuba-cluster.yaml
+  $HOME/bin/kubectl -n hussein-ns …'`. Tear down with `ssh -S ~/.ssh/skirit-cm.sock -O exit skirit`.
+- **There is NO repo checkout on skirit** — apply manifests by piping the LOCAL file over the
+  socket: `ssh -S ~/.ssh/skirit-cm.sock skirit '… kubectl -n hussein-ns apply -f -' <
+  deploy/cronjob.yaml`. (`kubectl set image cronjob/geoecon-daily pipeline=…:<tag>` also works
+  and needs no file.) DB checks: `kubectl exec -i geoecon-db-1 -- psql -U postgres -d geoeconomics`.
+- **Secrets** live in `geoecon-secrets` (`envFrom`). To add/rotate a key:
+  `kubectl -n hussein-ns patch secret geoecon-secrets --type merge -p
+  '{"stringData":{"KEY":"value"}}'`. `FIRECRAWL_API_KEY` is required for `render: firecrawl`
+  sources. **(The Firecrawl key has been in plaintext during dev — rotate it.)**
 - Push git under gh account **`jalalhussein1982`** then restore `menaregionsolutions`
   (memory `gh-account-for-repo`).
 - Images **must** build `--platform linux/amd64` (cluster is amd64; arm64 fails to pull).
-- Build/deploy: `docker buildx build --platform linux/amd64 --builder amd64builder -t
-  jalalhussein/geoecon-pipeline:<tag> --push .` (the Docker-Hub push is classifier-blocked →
-  the user must approve the prompt) → bump tag in `deploy/cronjob.yaml` + `deploy/smoke-job.yaml`
-  → `kubectl set image cronjob/geoecon-daily pipeline=…:<tag>` (or `kubectl apply`).
+  Build/deploy: start Docker Desktop (`open -a Docker`), then `docker buildx build
+  --platform linux/amd64 --builder amd64builder -t jalalhussein/geoecon-pipeline:<tag> --push .`
+  (Docker-Hub creds are in the Desktop keychain — pushed without a prompt this session) → bump
+  tag in `deploy/cronjob.yaml` + `deploy/smoke-job.yaml` → apply (above). Tag scheme `YYYYMMDD-N`.
 - Smoke test: `deploy/smoke-job.yaml` (DRY_RUN — renders, sends no email; doesn't touch
   `seen_events`). **Gotcha (2026-06-23):** `LIMIT` no longer caps the run — the registry
-  discovery path ignores it, so the smoke is now a full-size ~48-min run (gate + synthesis over
-  ~300 articles), not the cheap/fast 30 it was designed to be.
+  discovery path ignores it, so the smoke is a full ~48-min run. **For a quick coverage check,
+  prefer a one-off discovery Job** (a Job that runs `python -c` calling
+  `get_fetcher(src).discover(src)` for specific source ids) — minutes, not ~48.
 - **Never touch** the co-tenant `siem-*` / `acled-*` objects in `hussein-ns`.
 
 ## Models / coexistence (unchanged, still true)

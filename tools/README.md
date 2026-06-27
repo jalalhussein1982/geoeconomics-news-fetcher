@@ -54,7 +54,10 @@ existing rss/sitemap resolution.
 - `api` — a JSON/OData list endpoint (e.g. SharePoint `_api/web/lists`) returned a
   usable article list; `feed_url` points at the items endpoint.
 - `scrape` + `needs_review` — origin reachable but no feed/API; the article list is
-  JS-rendered (no headless browser here) or a selector needs manual capture.
+  JS-rendered (this prober has no headless browser) or a selector needs manual capture.
+  **At runtime these can be recovered** by setting `render: firecrawl` on the source — the
+  fetcher then pulls the rendered DOM via Firecrawl before applying `extract_hint` (see
+  `docs/how-it-works/03-registry-redesign.md` → "Firecrawl render path").
 - `dead` — **only** a confirmed DNS failure. Stale-path 404s, TLS/connection
   timeouts, and robots/ToS blocks are `needs_review` ("verify from production"),
   never retired.

@@ -1,5 +1,12 @@
 # Source registry — Task 0 resolution report
 
+> **Superseded in part (2026-06-27):** the "no headless browser" limit below no longer holds at
+> runtime — JS-rendered/403 sources are now recovered via the **Firecrawl render path**
+> (`render: firecrawl`; see `docs/how-it-works/03-registry-redesign.md`). 6 sources moved
+> `needs_review → live` since this report (`eg_cb_cbe`, `actor_imf`, `actor_worldbank`,
+> `wire_efe`, `reg_alarabiya_ar`, `eg_mof`); Core-15 is now 7/15. `sources.yaml` is the source
+> of truth for current status — the counts in this report are the 2026-06-23 baseline.
+
 Resolved 2026-06-23 by a live, robots-respecting prober (RSS/Atom discovery via alternate-links + probe paths + common defaults; SharePoint/OData list-API probe; no headless browser available, so JS-rendered article lists are left `needs_review`).
 
 **Totals (48 sources):** `rss`=11, `scrape`=34, `sitemap`=3  |  status: `live`=14, `needs_review`=34

@@ -131,18 +131,60 @@ The registry's *mechanics* layer (`fetch_type`/`feed_url`/`extract_hint`) ships
 read-only) → `tools/registry_apply.py` (comment-preserving write-back) →
 `config/sources.resolved.report.md`.
 
-**Current resolution (2026-06-23):** 48 sources → **11 rss + 3 sitemap = 14 live**, 34
+**Resolution (2026-06-23 baseline):** 48 sources → **11 rss + 3 sitemap = 14 live**, 34
 needs_review, 0 dead. **Core-15 primary coverage: 6/15** (UAE, Argentina, Brazil,
-Colombia, Israel via BOI+TASE, Saudi via PIF). The other 34 are JS-rendered portals.
+Colombia, Israel via BOI+TASE, Saudi via PIF). The other 34 were JS-rendered portals.
 
 **Spike B (ruled out):** anonymous SharePoint REST (`_api/web/lists`) is hardened off on
 all Gulf/MENA portals tested — **no API shortcut.** Headless rendering is the real lever
-for the remaining 34 and is unavailable in this environment.
+for the JS-rendered set — see the **Firecrawl render path** below, which supplies it.
+
+**Update (2026-06-27):** the headless lever is now in place via Firecrawl (a hosted
+render API, no in-cluster browser). 6 sources recovered → **Core-15 primary coverage
+7/15** (adds Egypt) and **tier1_live 3** (adds EFE). See the next section.
 
 Classification policy is **conservative**: only a confirmed DNS failure is `dead`;
 stale-path 404s / TLS-timeouts / robots blocks are `needs_review` ("verify from
 production"), never retired. `wire_ap` is held manually (its only sitemap is `/hub/*`
 section indexes, not articles).
+
+---
+
+## Firecrawl render path (2026-06-27)
+
+The JS-rendered/403 primaries that Task 0 left `needs_review` are recovered by fetching the
+**rendered** DOM through [Firecrawl](https://firecrawl.dev) (a hosted headless-render API),
+then running the *same* `extract_hint` CSS-selector logic. No browser runs in-cluster.
+
+- **Opt-in per source:** `render: firecrawl` in `sources.yaml`. `fetchers/base.get_fetcher`
+  then wires `ScrapeFetcher(fetch=firecrawl_fetch)`; everything downstream is unchanged.
+- **`geoecon/fetchers/firecrawl.py`** — `POST api.firecrawl.dev/v1/scrape` (`formats:[rawHtml]`,
+  `waitFor` 5s). Key from `FIRECRAWL_API_KEY` (cluster secret `geoecon-secrets`, like
+  `MAETCENTRUM_KEY`); read at call time so the pipeline runs without it when no live source
+  needs rendering. A missing key / API error raises `FirecrawlError`, which the per-source
+  `try/except` in `discovery_registry` logs-and-skips — a bad source never goes silently dark.
+- **Recency from the URL:** `ScrapeFetcher._date_from_url` parses `/YYYY/MM/DD/` (optionally
+  `/HH/MM/`) **and** `/YYYY-MM-DD/` from the article href so scrape items are window-filtered
+  (the fetcher otherwise emits `ts=None` and re-ingests the whole listing every run). **Date-only
+  URLs anchor to end-of-day (23:59:59), not 00:00** — the 24h window is measured back from
+  ~05:00 UTC at the 07:00 run, so a midnight ts false-excludes all of "yesterday's" items.
+- **`require_date: true`** — drops scraped links whose URL carries no date, so a broad selector
+  (`a[href*="/aswaq/"]`, `a[href*="/en/news/"]`) emits only dated articles and skips section/nav.
+
+**Live via this path (6):** `eg_cb_cbe`, `actor_imf` (image `20260627-2`); `actor_worldbank`,
+`wire_efe`, `reg_alarabiya_ar` (Firecrawl bypasses its 403), `eg_mof` (image `20260627-3`).
+
+**Still dark (and why):**
+- **Parked SPAs** — render but the article list isn't in the served DOM (loads via further AJAX):
+  Saudi/UAE/Qatar SharePoint, Tadawul/ADX, Turkey CB (WebSphere portal), Chile CB (Liferay),
+  Iran CB. Need per-source interaction or an API.
+- **`iq_cb_cbi`** — renders, but ~67 article links are undated and in non-chronological DOM
+  order → no safe recency window. Needs per-row date extraction (or a chronological selector +
+  `max_items` cap).
+- **Stale-URL (404)** — `ar_cb_bcra`, `mx_cb_banxico`, `mx_shcp`, `kw_cb_cbk`, `qa_qia`,
+  `gy_bog`: Firecrawl just renders a 404. Need the **correct current URL** (not a render fix).
+- **`actor_eu_sanctions`, `actor_opec`** — sites restructured; need the new listing URL.
+- **`wire_reuters_world`** — excluded: ToS forbids scraping.
 
 ---
 
@@ -152,6 +194,9 @@ section indexes, not articles).
   so pip doesn't bundle it; without it `discovery_registry` raises `FileNotFoundError`.
 - **CronJob** sets `SOURCES_PATH=/app/config/sources.yaml` (absolute, import-location
   independent) and `RANK_BY_CORROBORATION=false`.
+- **`geoecon-secrets`** must include `FIRECRAWL_API_KEY` for the `render: firecrawl` sources
+  (injected via `envFrom`). Absent → those sources log a `FirecrawlError` and skip; the rest
+  of the run is unaffected.
 - Images **must be built `--platform linux/amd64`** — the CERIT-SC nodes are amd64; an
   arm64 image fails with `no match for platform in manifest`.
 - Migrations `004`/`005`/`006` apply on startup. **006** added `discovery_registry` to the
@@ -164,18 +209,29 @@ section indexes, not articles).
 
 ## Follow-ups
 
-The single **live-env task** (Playwright-capable env with DB + LLM proxy + unblocked
-GDELT), in order — also mirrored in agent memory `registry-coverage-state`:
+**Coverage — keep recovering `needs_review` sources** (the Firecrawl render path is the
+mechanism; pattern documented above and in agent memory `firecrawl-render-path`):
 
-1. Run the consolidated re-resolution (`tools/registry_probe.py`, applying the precedence
-   rule) to **headless-resolve the 34 needs_review primaries**; run the API re-probe and
-   sitemap probe in the same pass.
-2. Re-run Task 0's report; confirm `core15_primaries_live` jumps from 6.
-3. One full live pipeline run; **review the brief as a brief**.
-4. Only then flip `RANK_BY_CORROBORATION` ON; review the before/after diff — confirm the
-   clusters that sink below `REGION_CAP` are genuinely the weakly-sourced ones. **This
-   diff review IS the calibration.**
-5. Tune the named weights in `geoecon/corroboration.py` against that distribution; commit.
+1. **Stale-URL (404) sources** — cheapest win, no render needed: find the current listing
+   URL for `ar_cb_bcra` (highest value — peso/IMF), `mx_cb_banxico`, `mx_shcp`, `kw_cb_cbk`,
+   `qa_qia`, `gy_bog`; then set `render: firecrawl` + `extract_hint` if the page is JS.
+2. **`iq_cb_cbi`** — extract per-row dates from the listing (or a chronological selector +
+   a `max_items` cap) so its ~67 undated items can be windowed; then flip live.
+3. **Parked SPAs** (SharePoint/WebSphere/Liferay/Iran) — need Firecrawl interaction (click/
+   scroll) or a per-site JSON endpoint; the served DOM has no article list.
+4. **`actor_eu_sanctions`, `actor_opec`** — repoint at the restructured sites' news/press
+   listing URLs, then render.
+
+**Workflow for each:** probe with Firecrawl (`scratchpad` `fc_batch.mjs` pattern) → find the
+dated article-link pattern → set `render` + `extract_hint` (+ `require_date`) + `status: live`
+→ validate the selector against the saved rendered DOM → rebuild/redeploy → confirm with a
+one-off in-cluster discovery Job.
+
+**Corroboration ranking** (independent of coverage):
+
+5. Flip `RANK_BY_CORROBORATION` ON; review the before/after diff — confirm the clusters that
+   sink below `REGION_CAP` are genuinely the weakly-sourced ones. **This diff review IS the
+   calibration.** Then tune the named weights in `geoecon/corroboration.py`; commit.
 
 **Open editorial observations** (from the run-16 review, not bugs):
 - **Egypt appears in both the Middle East and North Africa briefs** (`EG` maps to both

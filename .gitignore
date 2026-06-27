@@ -29,3 +29,7 @@ env/
 
 # Task 0 probe artifact (regenerable via tools/registry_probe.py)
 tools/registry_probe_results.json
+
+# Working / handoff scratch notes (not for publication)
+NEXT_SESSION.md
+PROMPT-changes-*.md

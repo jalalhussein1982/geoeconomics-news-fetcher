@@ -33,7 +33,13 @@ def _date_from_url(url: str) -> datetime | None:
         return None
     y, mo, d, hh, mm = m.groups()
     try:
-        return datetime(int(y), int(mo), int(d), int(hh or 0), int(mm or 0), tzinfo=timezone.utc)
+        if hh is not None:
+            return datetime(int(y), int(mo), int(d), int(hh), int(mm), tzinfo=timezone.utc)
+        # Date-only URL (e.g. IMF /2026/06/22/...): anchor to end-of-day, not 00:00.
+        # The recency window is measured back from `now` (~05:00 UTC for the 07:00
+        # run); a midnight ts would put all of "yesterday's" items before window_start
+        # and false-exclude them. End-of-day keeps the whole prior calendar day.
+        return datetime(int(y), int(mo), int(d), 23, 59, 59, tzinfo=timezone.utc)
     except ValueError:
         return None
 

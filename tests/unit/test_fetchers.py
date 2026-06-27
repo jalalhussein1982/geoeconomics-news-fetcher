@@ -130,8 +130,10 @@ def test_scrape_sets_ts_from_date_in_url():
     )
     f = ScrapeFetcher(fetch=lambda u: html)
     items = f.discover(_src(fetch_type="scrape", extract_hint="a.h", url="https://x.org/"))
+    # precise time when the URL carries it; end-of-day when date-only, so a 24h
+    # window measured back from ~now still keeps "yesterday's" date-only items.
     assert items[0].ts == datetime(2026, 6, 7, 8, 19, tzinfo=timezone.utc)
-    assert items[1].ts == datetime(2026, 6, 22, 0, 0, tzinfo=timezone.utc)
+    assert items[1].ts == datetime(2026, 6, 22, 23, 59, 59, tzinfo=timezone.utc)
     assert items[2].ts is None
 
 

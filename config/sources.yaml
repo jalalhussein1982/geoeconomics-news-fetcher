@@ -300,17 +300,18 @@ sources:
     tier: 0
     origin_class: [fiscal]
     fetch_type: scrape
+    render: firecrawl
     url: "https://www.mof.gov.eg/en/posts/news"
     feed_url: null
     probe_paths: ["/ar/posts/news", "/sitemap.xml", "/rss"]
-    extract_hint: null
+    extract_hint: 'a[href*="/en/posts/media/"]'
     lang: ar
     ownership: state
     state_alignment: EG
     reliability: high
-    notes: "Debt, budget, IMF-linked fiscal measures. Arabic-first. | Task0(2026-06-23): no feed; served HTML JS-rendered/thin (article-links~0); selector needs headless capture."
-    verified: "2026-06-23"
-    status: needs_review
+    notes: "Debt, budget, IMF-linked fiscal measures. Arabic-first. | Task0(2026-06-23): no feed; served HTML JS-rendered/thin (article-links~0); selector needs headless capture. | 2026-06-27: recovered via render:firecrawl — article links /en/posts/media/<id>/<slug> (id-based, no date in URL so no recency windowing; relies on seen_events dedup)."
+    verified: "2026-06-27"
+    status: live
 
   # ---------------------------------------------------------------------- TURKEY
   - id: tr_cb_tcmb
@@ -539,8 +540,8 @@ sources:
     state_alignment: IQ
     reliability: degraded
     notes: >-
-      FIPS=IZ. Dinar auctions, USD-flow controls = high geoeconomic salience. Arabic-first; EN partial. Pair with wire tier (Rudaw/Reuters Baghdad). | Task0(2026-06-23): no feed; served HTML JS-rendered/thin (article-links~109); selector needs headless capture.
-    verified: "2026-06-23"
+      FIPS=IZ. Dinar auctions, USD-flow controls = high geoeconomic salience. Arabic-first; EN partial. Pair with wire tier (Rudaw/Reuters Baghdad). | Task0(2026-06-23): no feed; served HTML JS-rendered/thin (article-links~109); selector needs headless capture. | 2026-06-27: Firecrawl renders OK — articles /news/view/<id> — but ~67 items are UNDATED and DOM order is non-chronological (view/94 before view/3234), so no safe recency windowing. PARKED pending date extraction from the listing rows (or a max_items cap on a chronological selector).
+    verified: "2026-06-27"
     status: needs_review
 
   # ----------------------------------------------- CORE LATAM: BRAZIL
@@ -835,18 +836,19 @@ sources:
     tier: 1
     origin_class: [macro, trade, energy, fiscal, monetary, investment]
     fetch_type: scrape
+    render: firecrawl
     url: "https://efe.com/economia/"
     feed_url: null
     probe_paths: ["/economia/feed/", "/rss", "/feed"]
-    extract_hint: null
+    extract_hint: 'a[href*="/economia/2"]'
     lang: es
     ownership: state_linked
     state_alignment: ES
     reliability: high
     notes: >-
-      Spanish wire with deep LatAm coverage — Spanish-native recall floor for the latam bucket. state_alignment=ES (Spanish gov-linked) — minor; mostly neutral on LatAm-internal economics. | Task0(2026-06-23): no feed; served HTML JS-rendered/thin (article-links~0); selector needs headless capture.
-    verified: "2026-06-23"
-    status: needs_review
+      Spanish wire with deep LatAm coverage — Spanish-native recall floor for the latam bucket. state_alignment=ES (Spanish gov-linked) — minor; mostly neutral on LatAm-internal economics. | Task0(2026-06-23): no feed; served HTML JS-rendered/thin (article-links~0); selector needs headless capture. | 2026-06-27: recovered via render:firecrawl — economy articles /economia/YYYY-MM-DD/<slug> (selector self-restricts to dated; ts parsed from dash-date).
+    verified: "2026-06-27"
+    status: live
 
   - id: wire_bloomberg_linea
     country: null
@@ -905,18 +907,20 @@ sources:
     tier: 2
     origin_class: [macro, trade, energy, fiscal, monetary, investment]
     fetch_type: scrape
+    render: firecrawl
     url: "https://www.alarabiya.net/aswaq"
     feed_url: null
     probe_paths: ["/.mrss.xml", "/feed/rss2/ar/aswaq.xml", "/rss"]
-    extract_hint: null
+    extract_hint: 'a[href*="/aswaq/"]'
+    require_date: true
     lang: ar
     ownership: state_linked
     state_alignment: SA
     reliability: high
     notes: >-
-      Saudi-owned — STATE_ALIGNMENT=SA. The deliberate counterweight to AJ's QA framing: pairing AJ(QA)+AlArabiya(SA) on a Gulf story is GOOD corroboration hygiene (different alignments). Arabic desk. JS-heavy; probe RSS. | Task0(2026-06-23): origin 403 to bots; no feed. Needs authenticated/headless review.
-    verified: "2026-06-23"
-    status: needs_review
+      Saudi-owned — STATE_ALIGNMENT=SA. The deliberate counterweight to AJ's QA framing: pairing AJ(QA)+AlArabiya(SA) on a Gulf story is GOOD corroboration hygiene (different alignments). Arabic desk. JS-heavy; probe RSS. | Task0(2026-06-23): origin 403 to bots; no feed. Needs authenticated/headless review. | 2026-06-27: recovered via render:firecrawl (bypasses the 403) — articles /aswaq/<sub>/YYYY/MM/DD/<slug>; require_date drops section/nav links.
+    verified: "2026-06-27"
+    status: live
 
   - id: reg_almonitor
     country: null
@@ -1080,17 +1084,19 @@ sources:
     tier: 0
     origin_class: [macro, fiscal, trade]
     fetch_type: scrape
+    render: firecrawl
     url: "https://www.worldbank.org/en/news"
     feed_url: null
     probe_paths: ["/en/news/all?format=rss", "/rss", "/feed"]
-    extract_hint: null
+    extract_hint: 'a[href*="/en/news/"]'
+    require_date: true
     lang: en
     ownership: multilateral
     state_alignment: null
     reliability: high
-    notes: "Actor-keyed. Lending, country diagnostics. Probe for RSS hub. | Task0(2026-06-23): no feed; served HTML JS-rendered/thin (article-links~9); selector needs headless capture."
-    verified: "2026-06-23"
-    status: needs_review
+    notes: "Actor-keyed. Lending, country diagnostics. Probe for RSS hub. | Task0(2026-06-23): no feed; served HTML JS-rendered/thin (article-links~9); selector needs headless capture. | 2026-06-27: recovered via render:firecrawl — articles /en/news/<type>/YYYY/MM/DD/<slug>; require_date drops /en/news/all listing + nav links."
+    verified: "2026-06-27"
+    status: live
 
   - id: actor_opec
     country: null

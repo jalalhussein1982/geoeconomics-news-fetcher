@@ -48,6 +48,7 @@ class Source:
     curated: bool = False             # user-named outlet: eligible for the ranking nudge
     section: str | None = None        # "economy" => economy-desk feed; else None/general
     render: str | None = None         # "firecrawl" => fetch JS-rendered DOM before scraping
+    require_date: bool = False         # drop scraped links whose URL carries no date (broad selectors)
 
     @property
     def is_fetchable(self) -> bool:

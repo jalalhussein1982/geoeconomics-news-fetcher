@@ -122,10 +122,11 @@ def test_scrape_no_hint_returns_empty():
 
 
 def test_scrape_sets_ts_from_date_in_url():
-    # Egypt-style path with date + time; IMF-style with date only.
+    # CBE-style path with date + time; IMF-style date-only (slashes); EFE-style date-only (dashes).
     html = (
         '<a class="h" href="https://x.org/news/2026/06/07/08/19/reserves">A</a>'
         '<a class="h" href="https://x.org/news/articles/2026/06/22/aid-falling">B</a>'
+        '<a class="h" href="https://x.org/economia/2026-06-26/brent-ormuz/">D</a>'
         '<a class="h" href="https://x.org/about/team">C</a>'  # no date -> None
     )
     f = ScrapeFetcher(fetch=lambda u: html)
@@ -134,7 +135,21 @@ def test_scrape_sets_ts_from_date_in_url():
     # window measured back from ~now still keeps "yesterday's" date-only items.
     assert items[0].ts == datetime(2026, 6, 7, 8, 19, tzinfo=timezone.utc)
     assert items[1].ts == datetime(2026, 6, 22, 23, 59, 59, tzinfo=timezone.utc)
-    assert items[2].ts is None
+    assert items[2].ts == datetime(2026, 6, 26, 23, 59, 59, tzinfo=timezone.utc)  # YYYY-MM-DD
+    assert items[3].ts is None
+
+
+def test_scrape_require_date_drops_undated_links():
+    # A broad selector matches both a dated article and an undated section page.
+    html = (
+        '<a class="h" href="https://x.org/aswaq/economy/2026/06/26/oil-falls">art</a>'
+        '<a class="h" href="https://x.org/aswaq/economy">section</a>'
+    )
+    f = ScrapeFetcher(fetch=lambda u: html)
+    items = f.discover(_src(fetch_type="scrape", extract_hint="a.h",
+                            require_date=True, url="https://x.org/"))
+    assert [i.url for i in items] == ["https://x.org/aswaq/economy/2026/06/26/oil-falls"]
+    assert items[0].ts == datetime(2026, 6, 26, 23, 59, 59, tzinfo=timezone.utc)
 
 
 # ---- sitemap ----

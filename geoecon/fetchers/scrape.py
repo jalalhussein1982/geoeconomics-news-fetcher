@@ -20,11 +20,11 @@ from .http import BROWSER_UA
 
 log = logging.getLogger("geoecon.fetchers.scrape")
 
-# Many news/press URLs embed the publish date as `/YYYY/MM/DD/` (optionally
-# `/HH/MM/`), e.g. CBE `/news/2026/06/07/08/19/...` and IMF `/articles/2026/06/22/...`.
-# Parsing it lets the registry stage window scrape items by recency instead of
-# re-ingesting the whole listing every run (the fetcher otherwise has no ts).
-_URL_DATE_RX = re.compile(r"/(20\d\d)/(\d{2})/(\d{2})(?:/(\d{2})/(\d{2}))?(?:/|$)")
+# Many news/press URLs embed the publish date — either `/YYYY/MM/DD/` (CBE, IMF,
+# World Bank, Al Arabiya) or `/YYYY-MM-DD/` (EFE) — optionally followed by `/HH/MM/`
+# (CBE). Parsing it lets the registry stage window scrape items by recency instead
+# of re-ingesting the whole listing every run (the fetcher otherwise has no ts).
+_URL_DATE_RX = re.compile(r"/(20\d\d)[/-](\d{1,2})[/-](\d{1,2})(?:/(\d{2})/(\d{2}))?(?:/|$|[-_.?#])")
 
 
 def _date_from_url(url: str) -> datetime | None:
@@ -81,7 +81,13 @@ class ScrapeFetcher:
             if href in seen:
                 continue
             seen.add(href)
+            ts = _date_from_url(href)
+            # require_date: broad selectors (e.g. a[href*="/aswaq/"]) also match
+            # section/nav links; keep only items whose URL carries a date so the
+            # section pages are dropped and recency windowing still applies.
+            if getattr(source, "require_date", False) and ts is None:
+                continue
             title = " ".join(el.text_content().split()) or None
-            items.append(DiscoveredItem(url=href, title=title, ts=_date_from_url(href),
+            items.append(DiscoveredItem(url=href, title=title, ts=ts,
                                         source_lang=source.lang))
         return items

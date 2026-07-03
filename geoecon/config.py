@@ -18,13 +18,13 @@ class Config:
     from_addr: str
     recipients: tuple[str, ...]
     llm_base_url: str = "https://llm.ai.e-infra.cz/v1"
-    synthesis_model: str = "deepseek-v3.2"
+    synthesis_model: str = "kimi-k2.6"
     synthesis_prompt_id: str = "task_a_cov"
     embedding_model: str | None = None
     regions: tuple[str, ...] = ("MENA", "LatAm")
     buckets: tuple[str, ...] = BUCKET_ORDER
-    gate_model: str = "deepseek-v3.2"
-    dedup_model: str = "deepseek-v3.2"
+    gate_model: str = "kimi-k2.6"
+    dedup_model: str = "kimi-k2.6"
     gate_batch_size: int = 15
     region_cap: int = 12
     discovery_ceiling: int = 120
@@ -64,13 +64,13 @@ class Config:
             from_addr=env["FROM_ADDR"],
             recipients=_split(env["RECIPIENTS"]),
             llm_base_url=env.get("LLM_BASE_URL", "https://llm.ai.e-infra.cz/v1"),
-            synthesis_model=env.get("SYNTHESIS_MODEL", "deepseek-v3.2"),
+            synthesis_model=env.get("SYNTHESIS_MODEL", "kimi-k2.6"),
             synthesis_prompt_id=env.get("SYNTHESIS_PROMPT_ID", "task_a_cov"),
             embedding_model=env.get("EMBEDDING_MODEL") or None,
             regions=_split(env.get("REGIONS", "MENA,LatAm")),
             buckets=_split(env.get("BUCKETS", ",".join(BUCKET_ORDER))),
-            gate_model=env.get("GATE_MODEL", "deepseek-v3.2"),
-            dedup_model=env.get("DEDUP_MODEL", "deepseek-v3.2"),
+            gate_model=env.get("GATE_MODEL", "kimi-k2.6"),
+            dedup_model=env.get("DEDUP_MODEL", "kimi-k2.6"),
             gate_batch_size=int(env.get("GATE_BATCH_SIZE", "15")),
             region_cap=int(env.get("REGION_CAP", "12")),
             discovery_ceiling=int(env.get("DISCOVERY_CEILING", "120")),

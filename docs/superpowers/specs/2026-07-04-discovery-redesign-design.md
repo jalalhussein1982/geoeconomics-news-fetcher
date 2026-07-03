@@ -1,7 +1,8 @@
 # Discovery Layer Redesign — Four-Layer Query-Driven Ingestion
 
 **Date:** 2026-07-04
-**Status:** Approved (design); Phase 0 probe pending API key
+**Status:** Approved (design); Phase 0 probe RUN — TheNewsAPI **NO-GO**, Google
+News RSS promoted to Layer-1 spine (see Phase-0 results addendum at bottom)
 **Scope:** Replaces the discovery stages only. Extract → gate → cluster → rank → synth → send are untouched.
 
 ## Problem
@@ -192,3 +193,51 @@ cut the ~2h run time substantially.
 - Gate/cluster/rank/synth changes.
 - GNews integration (fallback path only; decided by probe).
 - Firecrawl `/search` gap-filler wiring.
+
+## Phase-0 probe results (2026-07-04, `tools/search_probe.py`)
+
+10 countries (EG SA AE TR IQ / BR MX AR CL CO) × Family 1+2, 31h window.
+Raw data: `tools/search_probe_results.json`.
+
+**TheNewsAPI — NO-GO as backbone.** Two disqualifying findings:
+
+1. **`locale` filter is ignored** (free tier at minimum): identical
+   `meta.found` and identical top articles with `locale=mx` vs no locale
+   (1141), and MX/AR/CL/CO all returned the same 1422/503 counts. No
+   per-country filtering → country attribution would fall entirely on us.
+2. **Arabic/Turkish index is near-empty:** ~250 Arabic articles per 31h in
+   the ENTIRE index (all locales); keyword `اقتصاد` → 1 hit; Turkish 125/31h,
+   top sources are tech blogs. Search relevance also poor (an
+   `Egypt + (economy|inflation|debt)` query returned a US July-4th piece).
+   Paying $19/mo does not fix an empty index. es/pt volume exists
+   (1141–1422/31h) but is Spain-mixed and un-filterable per finding 1.
+
+**Google News RSS — promoted to Layer-1 spine.** Every country hit the
+100-item feed cap on Family 1; 35–83 unique sources per feed; strong
+freshness (fresh-under-6h per country, both families: MX 117, AR 113, CO 113,
+BR 103, EG 65, SA 66, IQ 66, AE 53, TR 20). Arabic editions work well.
+**Known implementation cost:** feed links are `news.google.com/rss/articles/
+CBMi...` encoded URLs; a plain GET lands on consent.google.com (verified).
+The adapter must decode them (googlenewsdecoder-style batchexecute approach);
+fallback for undecodable links: Firecrawl scrape of the redirect URL.
+Telemetry guard: if GN returns ~0 across many countries, loud recall-floor
+WARNING (endpoint is unofficial).
+
+**GDELT DOC 2.0 — probe inconclusive from dev IP** (429 penalty box after
+probe burst; needs ≥5s spacing *and* cooldown). Re-probe from cluster IP
+during Phase 2; role (corroboration net) unchanged.
+
+**Revised layer table:**
+
+```
+Layer 1  Google News RSS      spine (free)         search:googlenews
+Layer 2  <paid slot: EMPTY>   optional, deferred   — GNews census may fill it
+Layer 3  GDELT DOC 2.0        corroboration net    gdelt
+Layer 4  Registry tier-0      primaries            registry
++ Firecrawl /search           gap-filler (bench)
+```
+
+The paid backbone slot stays open behind the `SearchProvider` interface.
+Optional next probe: census GNews's Arabic/LATAM source depth on its free
+tier (12h delay is irrelevant for a census) to decide whether Essential
+(€39.99/mo annual) earns the Layer-2 slot. Budget spent so far: $0/mo.

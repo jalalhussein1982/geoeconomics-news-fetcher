@@ -1,0 +1,456 @@
+{
+ "ts": "2026-07-03T23:24:35.473446+00:00",
+ "rows": [
+  {
+   "label": "EG F1 country=eg",
+   "http": 200,
+   "total": 1,
+   "returned": 1,
+   "domains": [
+    "arabic.rt.com"
+   ],
+   "ages_h": [
+    12.8
+   ],
+   "titles": [
+    "التضخم في تركيا يتراجع بعد شهرين من النمو المتسارع"
+   ],
+   "errors": null
+  },
+  {
+   "label": "EG F2 country=eg",
+   "http": 200,
+   "total": 0,
+   "returned": 0,
+   "domains": [],
+   "ages_h": [],
+   "titles": [],
+   "errors": null
+  },
+  {
+   "label": "SA F1 country=sa",
+   "http": 200,
+   "total": 3,
+   "returned": 3,
+   "domains": [
+    "aawsat.com",
+    "arabic.rt.com"
+   ],
+   "ages_h": [
+    12.2,
+    12.8,
+    14.4
+   ],
+   "titles": [
+    "لاغارد لا تستبعد الاستقالة المبكرة من \"المركزي الأوروبي\"",
+    "التضخم في تركيا يتراجع بعد شهرين من النمو المتسارع",
+    "زيارة الطبيب إلزامية من اليوم الأول... ألمانيا تشدد قواعد الإجازات المرضية"
+   ],
+   "errors": null
+  },
+  {
+   "label": "SA F2 country=sa",
+   "http": 200,
+   "total": 0,
+   "returned": 0,
+   "domains": [],
+   "ages_h": [],
+   "titles": [],
+   "errors": null
+  },
+  {
+   "label": "AE F1 country=ae",
+   "http": 200,
+   "total": 3,
+   "returned": 3,
+   "domains": [
+    "aawsat.com",
+    "arabic.rt.com"
+   ],
+   "ages_h": [
+    12.2,
+    12.8,
+    14.4
+   ],
+   "titles": [
+    "لاغارد لا تستبعد الاستقالة المبكرة من \"المركزي الأوروبي\"",
+    "التضخم في تركيا يتراجع بعد شهرين من النمو المتسارع",
+    "زيارة الطبيب إلزامية من اليوم الأول... ألمانيا تشدد قواعد الإجازات المرضية"
+   ],
+   "errors": null
+  },
+  {
+   "label": "AE F2 country=ae",
+   "http": 200,
+   "total": 0,
+   "returned": 0,
+   "domains": [],
+   "ages_h": [],
+   "titles": [],
+   "errors": null
+  },
+  {
+   "label": "TR F1 country=tr",
+   "http": 200,
+   "total": 3,
+   "returned": 3,
+   "domains": [
+    "www.hurriyet.com.tr"
+   ],
+   "ages_h": [
+    17.0,
+    19.9,
+    25.6
+   ],
+   "titles": [
+    "KİRA ARTIŞ ORANI TEMMUZ 2026 | Temmuz ayı kira artış zammı açıklandı mı? ? TEFE-",
+    "Sayın Şimşek’e gollük pas",
+    "MECLİS TATİL TARİHİ 2026 | TBMM ne zaman tatile girecek? Meclis kapandı mı, tati"
+   ],
+   "errors": null
+  },
+  {
+   "label": "TR F2 country=tr",
+   "http": 200,
+   "total": 0,
+   "returned": 0,
+   "domains": [],
+   "ages_h": [],
+   "titles": [],
+   "errors": null
+  },
+  {
+   "label": "IQ F1 country=iq",
+   "http": 200,
+   "total": 3,
+   "returned": 3,
+   "domains": [
+    "aawsat.com",
+    "arabic.rt.com"
+   ],
+   "ages_h": [
+    12.2,
+    12.8,
+    14.4
+   ],
+   "titles": [
+    "لاغارد لا تستبعد الاستقالة المبكرة من \"المركزي الأوروبي\"",
+    "التضخم في تركيا يتراجع بعد شهرين من النمو المتسارع",
+    "زيارة الطبيب إلزامية من اليوم الأول... ألمانيا تشدد قواعد الإجازات المرضية"
+   ],
+   "errors": null
+  },
+  {
+   "label": "IQ F2 country=iq",
+   "http": 200,
+   "total": 0,
+   "returned": 0,
+   "domains": [],
+   "ages_h": [],
+   "titles": [],
+   "errors": null
+  },
+  {
+   "label": "BR F1 country=br",
+   "http": 200,
+   "total": 93,
+   "returned": 10,
+   "domains": [
+    "www.cnnbrasil.com.br",
+    "www.em.com.br",
+    "www.estadao.com.br",
+    "www.infomoney.com.br"
+   ],
+   "ages_h": [
+    12.1,
+    12.3,
+    12.4,
+    12.6,
+    12.8,
+    13.0,
+    13.2,
+    13.4,
+    13.4,
+    13.4
+   ],
+   "titles": [
+    "acompanhe em tempo real a Bolsa de Valores",
+    "Dividendos para julho: em cenário de juros elevados, bancos são os favoritos; ve",
+    "Santander reforça visão do mercado de economia mais fraca em 2027"
+   ],
+   "errors": null
+  },
+  {
+   "label": "BR F2 country=br",
+   "http": 200,
+   "total": 73,
+   "returned": 10,
+   "domains": [
+    "extra.globo.com",
+    "valor.globo.com",
+    "www.brasil247.com",
+    "www.diariodepernambuco.com.br",
+    "www.diariodocentrodomundo.com.br",
+    "www.em.com.br",
+    "www.folhabv.com.br",
+    "www.infomoney.com.br",
+    "www.meionews.com"
+   ],
+   "ages_h": [
+    12.4,
+    12.6,
+    13.0,
+    13.4,
+    13.5,
+    13.6,
+    13.6,
+    13.8,
+    14.7,
+    15.4
+   ],
+   "titles": [
+    "Governo brasileiro sugere medidas para contemplar americanos em negociação para ",
+    "Alvo de sanções dos EUA por elo com o PCC é presa pela PF; empresário está forag",
+    "Operação da PF prende secretária alvo de sanção dos EUA por suspeita de ligação "
+   ],
+   "errors": null
+  },
+  {
+   "label": "MX F1 country=mx",
+   "http": 200,
+   "total": 7,
+   "returned": 7,
+   "domains": [
+    "www.elfinanciero.com.mx",
+    "www.eluniversal.com.mx"
+   ],
+   "ages_h": [
+    12.5,
+    13.4,
+    13.6,
+    15.5,
+    25.7,
+    28.0,
+    30.8
+   ],
+   "titles": [
+    "Otro episodio en la Corte de Lenia contra las empresas… que perdió",
+    "El semáforo económico de COPARMEX CDMX se encuentra en amarillo",
+    "Los cabilderos de México en Washington"
+   ],
+   "errors": null
+  },
+  {
+   "label": "MX F2 country=mx",
+   "http": 200,
+   "total": 1,
+   "returned": 1,
+   "domains": [
+    "www.eluniversal.com.mx"
+   ],
+   "ages_h": [
+    20.9
+   ],
+   "titles": [
+    "Se eleva a 2 mil 595 la cifra de muertos por el doble terremoto en Venezuela"
+   ],
+   "errors": null
+  },
+  {
+   "label": "AR F1 country=ar",
+   "http": 200,
+   "total": 2,
+   "returned": 2,
+   "domains": [
+    "www.clarin.com"
+   ],
+   "ages_h": [
+    23.0,
+    23.9
+   ],
+   "titles": [
+    "La historia secreta de la salida de Adorni, las condiciones de Santilli y el pla",
+    "Economía dos caras: sube el gasto en servicios, compras online, viajes al exteri"
+   ],
+   "errors": null
+  },
+  {
+   "label": "AR F2 country=ar",
+   "http": 200,
+   "total": 0,
+   "returned": 0,
+   "domains": [],
+   "ages_h": [],
+   "titles": [],
+   "errors": null
+  },
+  {
+   "label": "CL F1 country=cl",
+   "http": 200,
+   "total": 101,
+   "returned": 10,
+   "domains": [
+    "diariocorreo.pe",
+    "rpp.pe",
+    "www.20minutos.es",
+    "www.abc.es",
+    "www.antena3.com",
+    "www.diariodesevilla.es",
+    "www.eldiario.es",
+    "www.elfinanciero.com.mx",
+    "www.infobae.com",
+    "www.lavanguardia.com"
+   ],
+   "ages_h": [
+    12.2,
+    12.3,
+    12.3,
+    12.3,
+    12.4,
+    12.4,
+    12.5,
+    12.5,
+    12.5,
+    12.7
+   ],
+   "titles": [
+    "Un juez exonera a un particular del pago de 6 millones de una deuda",
+    "Dura crítica de Martín Menem a Axel Kicillof: “Tendría que estar inhabilitado pa",
+    "Precio del dólar Perú y tipo de cambio hoy 03 de julio del 2026"
+   ],
+   "errors": null
+  },
+  {
+   "label": "CL F2 country=cl",
+   "http": 200,
+   "total": 25,
+   "returned": 10,
+   "domains": [
+    "as.com",
+    "laopinion.com",
+    "okdiario.com",
+    "www.20minutos.es",
+    "www.abc.es",
+    "www.eltiempo.com",
+    "www.ideal.es",
+    "www.larazon.es",
+    "www.lasexta.com",
+    "www.sport.es"
+   ],
+   "ages_h": [
+    12.2,
+    12.4,
+    13.5,
+    13.6,
+    14.6,
+    14.9,
+    15.3,
+    18.1,
+    18.4,
+    18.7
+   ],
+   "titles": [
+    "Confirmado: la DGT celebra el cambio histórico en el carné de conducir con sanci",
+    "\"Una penalización de...\": Carlos Sainz propone sanciones a quien provoque bander",
+    "La AEPD lo confirma: si en un hotel te piden una copia del DNI para hacer el reg"
+   ],
+   "errors": null
+  },
+  {
+   "label": "CO F1 country=co",
+   "http": 200,
+   "total": 2,
+   "returned": 2,
+   "domains": [
+    "www.eltiempo.com"
+   ],
+   "ages_h": [
+    25.4,
+    27.3
+   ],
+   "titles": [
+    "Los cuatro desafíos en la hoja de ruta económica que debe enfrentar y solucionar",
+    "‘Se confirmó un hallazgo disciplinario contra el ministro de Hacienda por el man"
+   ],
+   "errors": null
+  },
+  {
+   "label": "CO F2 country=co",
+   "http": 200,
+   "total": 3,
+   "returned": 3,
+   "domains": [
+    "www.elheraldo.co",
+    "www.eltiempo.com"
+   ],
+   "ages_h": [
+    13.6,
+    21.8,
+    24.6
+   ],
+   "titles": [
+    "Venezuela hoy, 3 de julio, tras los dos fuertes terremotos: muertos suben a 2.59",
+    "Delcy Rodríguez asegura que continúa la fase de rescate en Venezuela mientras se",
+    "Trump asegura que evitó “ocho guerras” usando aranceles como herramienta de pres"
+   ],
+   "errors": null
+  },
+  {
+   "label": "es F1 NO country",
+   "http": 200,
+   "total": 101,
+   "returned": 10,
+   "domains": [
+    "diariocorreo.pe",
+    "rpp.pe",
+    "www.20minutos.es",
+    "www.abc.es",
+    "www.antena3.com",
+    "www.diariodesevilla.es",
+    "www.eldiario.es",
+    "www.elfinanciero.com.mx",
+    "www.infobae.com",
+    "www.lavanguardia.com"
+   ],
+   "ages_h": [
+    12.2,
+    12.3,
+    12.3,
+    12.3,
+    12.4,
+    12.4,
+    12.5,
+    12.5,
+    12.5,
+    12.7
+   ],
+   "titles": [
+    "Un juez exonera a un particular del pago de 6 millones de una deuda",
+    "Dura crítica de Martín Menem a Axel Kicillof: “Tendría que estar inhabilitado pa",
+    "Precio del dólar Perú y tipo de cambio hoy 03 de julio del 2026"
+   ],
+   "errors": null
+  },
+  {
+   "label": "ar F1 NO country",
+   "http": 200,
+   "total": 3,
+   "returned": 3,
+   "domains": [
+    "aawsat.com",
+    "arabic.rt.com"
+   ],
+   "ages_h": [
+    12.2,
+    12.8,
+    14.4
+   ],
+   "titles": [
+    "لاغارد لا تستبعد الاستقالة المبكرة من \"المركزي الأوروبي\"",
+    "التضخم في تركيا يتراجع بعد شهرين من النمو المتسارع",
+    "زيارة الطبيب إلزامية من اليوم الأول... ألمانيا تشدد قواعد الإجازات المرضية"
+   ],
+   "errors": null
+  }
+ ]
+}

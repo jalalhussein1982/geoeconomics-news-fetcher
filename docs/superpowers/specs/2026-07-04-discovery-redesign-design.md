@@ -238,6 +238,26 @@ Layer 4  Registry tier-0      primaries            registry
 ```
 
 The paid backbone slot stays open behind the `SearchProvider` interface.
-Optional next probe: census GNews's Arabic/LATAM source depth on its free
-tier (12h delay is irrelevant for a census) to decide whether Essential
-(€39.99/mo annual) earns the Layer-2 slot. Budget spent so far: $0/mo.
+Budget spent: $0/mo.
+
+**GNews census (2026-07-04, `tools/gnews_census_results.json`) — NO-GO.**
+Free-tier census, 22 requests:
+
+1. **Unsupported countries fail silently to unfiltered results:** SA, AE, CL,
+   IQ are not in GNews's country list; `country=sa|ae|iq` quietly returned
+   the identical language-wide result set (total=3 = `lang=ar` no-country),
+   `country=cl` = 101 = `lang=es` no-country. Silent no-filter fallback on
+   Saudi/UAE/Iraq is structurally disqualifying for a MENA pipeline.
+2. **Visible index is microscopic:** language-wide Arabic Family-1 total = 3
+   articles/31h; Mexico = 7; Argentina = 2; Colombia = 2 (vs Google News
+   hitting the 100-item cap everywhere). Caveat: the free tier may search a
+   reduced source pool vs paid — but we cannot verify paid depth without
+   paying, and finding 1 stands regardless of tier.
+3. 12h delay confirmed empirically (min article age 12.1–25.4h in every
+   query).
+
+**Final Phase-0 outcome:** both candidate paid backbones failed on evidence.
+Layer-2 paid slot stays empty; proceed to Phase 1 with Google News RSS spine
++ GDELT DOC + tier-0 registry + Firecrawl gap-filler. Revisit a paid layer
+only if live-run telemetry shows per-country recall gaps (World News API
+remains the best-researched candidate if its signup gets fixed).

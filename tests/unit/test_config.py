@@ -118,3 +118,30 @@ def test_country_cap_default_and_override():
     assert Config.from_env(dict(_ENV)).country_cap == 4
     assert Config.from_env({**_ENV, "COUNTRY_CAP": "0"}).country_cap == 0
     assert Config.from_env({**_ENV, "COUNTRY_CAP": "3"}).country_cap == 3
+
+
+def _base_env(**over):
+    env = {"DB_DSN": "x", "MAETCENTRUM_KEY": "k", "SMTP_HOST": "h", "SMTP_USER": "u",
+           "SMTP_PASSWORD": "p", "FROM_ADDR": "f", "RECIPIENTS": "r@x"}
+    env.update(over)
+    return env
+
+
+def test_search_discovery_defaults_off():
+    cfg = Config.from_env(_base_env())
+    assert cfg.search_discovery is False
+    assert cfg.search_country_cap == 25
+    assert cfg.countries_path is None
+    assert cfg.keywords_path is None
+    assert cfg.gdelt_mode == "gkg"
+
+
+def test_search_discovery_env_overrides():
+    cfg = Config.from_env(_base_env(SEARCH_DISCOVERY="true", SEARCH_COUNTRY_CAP="10",
+                                    COUNTRIES_PATH="/tmp/c.yaml", KEYWORDS_PATH="/tmp/k.yaml",
+                                    GDELT_MODE="docapi"))
+    assert cfg.search_discovery is True
+    assert cfg.search_country_cap == 10
+    assert cfg.countries_path == "/tmp/c.yaml"
+    assert cfg.keywords_path == "/tmp/k.yaml"
+    assert cfg.gdelt_mode == "docapi"

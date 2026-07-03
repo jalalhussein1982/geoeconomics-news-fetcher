@@ -46,6 +46,12 @@ class Config:
     curated_boost: float = 0.15           # CURATED_BOOST
     economy_section_boost: float = 0.10   # ECONOMY_SECTION_BOOST
     country_cap: int = 4                   # COUNTRY_CAP; max records per country per region (0 disables)
+    # Discovery redesign (spec 2026-07-04). All default-off / inert until Phase 4 flips env.
+    search_discovery: bool = False        # SEARCH_DISCOVERY; enables discovery_search stage
+    search_country_cap: int = 25          # SEARCH_COUNTRY_CAP; max inserts per provider+country+family feed
+    countries_path: str | None = None     # COUNTRIES_PATH; None => config/countries.yaml
+    keywords_path: str | None = None      # KEYWORDS_PATH; None => config/keywords.yaml
+    gdelt_mode: str = "gkg"               # GDELT_MODE: gkg (legacy files) | docapi (DOC 2.0)
     limit: int | None = None
 
     @classmethod
@@ -88,5 +94,10 @@ class Config:
             curated_boost=float(env.get("CURATED_BOOST", "0.15")),
             economy_section_boost=float(env.get("ECONOMY_SECTION_BOOST", "0.10")),
             country_cap=int(env.get("COUNTRY_CAP", "4")),
+            search_discovery=env.get("SEARCH_DISCOVERY", "false").lower() == "true",
+            search_country_cap=int(env.get("SEARCH_COUNTRY_CAP", "25")),
+            countries_path=env.get("COUNTRIES_PATH") or None,
+            keywords_path=env.get("KEYWORDS_PATH") or None,
+            gdelt_mode=env.get("GDELT_MODE", "gkg"),
             limit=int(limit) if limit else None,
         )

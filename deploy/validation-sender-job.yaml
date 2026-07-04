@@ -1,0 +1,96 @@
+# One-off companion to a DRY_RUN validation run (Phase 4, 2026-07-04).
+#
+# The flags-on smoke job renders newsletters but does not send (DRY_RUN=true).
+# This job waits IN-CLUSTER for that specific run to complete, then delivers its
+# already-rendered newsletters — so validation emails go out even if nobody is
+# at a terminal. Recipients are overridden to the evaluator only (env beats
+# envFrom), so the second subscriber does not receive a validation brief.
+#
+# TARGET_RUN_ID is pinned when the manifest is applied. If the target run ends
+# 'failed', nothing is sent (exit 2). mark_emitted only fires when all regions
+# send, mirroring the orchestrator's own send stage.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: geoecon-validation-sender
+  namespace: hussein-ns
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 21600   # give up after 6h
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels: { app: geoecon, run: validation-sender }
+    spec:
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: sender
+          image: jalalhussein/geoecon-pipeline:20260704-2
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: ["ALL"] }
+          envFrom:
+            - secretRef: { name: geoecon-secrets }
+          env:
+            - name: DB_USER
+              valueFrom: { secretKeyRef: { name: geoecon-db-app, key: username } }
+            - name: DB_PASS
+              valueFrom: { secretKeyRef: { name: geoecon-db-app, key: password } }
+            - name: DB_DSN
+              value: "postgresql://$(DB_USER):$(DB_PASS)@geoecon-db-rw:5432/geoeconomics"
+            # validation delivery: evaluator only (env overrides envFrom secret)
+            - name: RECIPIENTS
+              value: "jalalhussein@gmail.com"
+            - name: TARGET_RUN_ID
+              value: "35"
+          command: ["python", "-c"]
+          args:
+            - |
+              import os, sys, time
+              from datetime import datetime, timezone
+              from geoecon.config import Config
+              from geoecon.state import db
+              from geoecon.state.repo import Repo
+              from geoecon.stages import send as send_stage
+              from geoecon import regions
+
+              run_id = int(os.environ["TARGET_RUN_ID"])
+              cfg = Config.from_env(os.environ)
+              conn = db.connect(cfg.db_dsn)
+              repo = Repo(conn)
+
+              print(f"waiting for run {run_id} to complete...", flush=True)
+              deadline = time.time() + 5 * 3600
+              status = None
+              while time.time() < deadline:
+                  row = conn.execute("SELECT status FROM runs WHERE run_id=%s",
+                                     (run_id,)).fetchone()
+                  status = row[0] if row else None
+                  if status in ("completed", "failed"):
+                      break
+                  time.sleep(60)
+              print(f"run {run_id} status: {status}", flush=True)
+              if status != "completed":
+                  print("target run did not complete cleanly -- NOT sending", flush=True)
+                  sys.exit(2)
+
+              newsletters = repo.newsletters_for_run(run_id)
+              if not newsletters:
+                  print("no newsletters rendered for the run -- nothing to send", flush=True)
+                  sys.exit(3)
+              date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+              def subject_for(bucket):
+                  display = regions.BUCKET_DISPLAY.get(bucket, bucket or "")
+                  return f"Geoeconomic Brief — {display} — {date_str} (search-spine validation)"
+              out = send_stage.send_pending(cfg, repo, newsletters, subject_for)
+              print("send result:", out, flush=True)
+              if out.get("all_sent"):
+                  repo.mark_emitted(run_id)
+                  print("all regions sent; run marked emitted", flush=True)
+              else:
+                  sys.exit(4)

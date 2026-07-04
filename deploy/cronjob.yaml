@@ -24,7 +24,7 @@ spec:
             seccompProfile: { type: RuntimeDefault }
           containers:
             - name: pipeline
-              image: jalalhussein/geoecon-pipeline:20260703-1
+              image: jalalhussein/geoecon-pipeline:20260704-2
               args: ["run"]
               securityContext:
                 allowPrivilegeEscalation: false
@@ -55,6 +55,17 @@ spec:
                 # Set "0" to disable -> ranking byte-identical to pre-cap.
                 - name: COUNTRY_CAP
                   value: "4"
+                # Discovery redesign (spec 2026-07-04), ON from 20260704-2:
+                # Google News search spine (42 countries x 2 keyword families);
+                # retired tier-1/2 registry outlets skip while this is on.
+                # Set "false" to revert to the pre-redesign pipeline wholesale.
+                - name: SEARCH_DISCOVERY
+                  value: "true"
+                # GDELT stays on the legacy GKG-file path: the DOC 2.0 API could
+                # not be validated (soft-block/429 from both dev and cluster IPs,
+                # 2026-07-04). Flip to "docapi" only after a clean live probe.
+                - name: GDELT_MODE
+                  value: "gkg"
               resources:
                 requests: { cpu: "1", memory: "1Gi" }
                 limits: { cpu: "2", memory: "2Gi" }

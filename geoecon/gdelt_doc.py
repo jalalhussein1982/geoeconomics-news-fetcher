@@ -47,8 +47,12 @@ def fetch_articles(query: str, timespan_h: int, *, max_records: int = 250,
               "sort": "datedesc"}
     for attempt in (1, 2):
         sleep(pace_s)
-        r = http.get(BASE_URL, params=params, timeout=60,
-                     headers={"User-Agent": _UA})
+        try:
+            r = http.get(BASE_URL, params=params, timeout=60,
+                         headers={"User-Agent": _UA})
+        except Exception:
+            # Request-level exception: return [] immediately, no retry
+            return []
         if r.status_code == 429:
             if attempt == 1:
                 sleep(30.0)
@@ -58,8 +62,10 @@ def fetch_articles(query: str, timespan_h: int, *, max_records: int = 250,
             data = json.loads(r.text)
         except (ValueError, TypeError):
             return []
+        # Guard against null or non-dict JSON
+        if not isinstance(data, dict):
+            return []
         return [DocArticle(url=a.get("url"), title=a.get("title"),
                            domain=a.get("domain"), language=a.get("language"),
                            seendate=_parse_seendate(a.get("seendate")))
                 for a in data.get("articles", []) if a.get("url")]
-    return []

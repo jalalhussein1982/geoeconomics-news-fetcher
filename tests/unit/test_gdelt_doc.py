@@ -18,7 +18,11 @@ class _Resp:
 class FakeHttp:
     def __init__(self, responses): self.responses = list(responses); self.calls = []
     def get(self, url, params=None, **kw):
-        self.calls.append(params); return self.responses.pop(0)
+        self.calls.append(params)
+        response = self.responses.pop(0)
+        if isinstance(response, Exception):
+            raise response
+        return response
 
 
 def test_build_query():
@@ -49,6 +53,17 @@ def test_429_retries_once_then_gives_up_empty():
 
 def test_non_json_body_returns_empty():
     http = FakeHttp([_Resp("<html>error</html>", 200)])
+    assert gdelt_doc.fetch_articles("q", 24, http=http, sleep=lambda s: None) == []
+
+
+def test_request_exception_returns_empty():
+    import requests
+    http = FakeHttp([requests.exceptions.ConnectionError("boom")])
+    assert gdelt_doc.fetch_articles("q", 24, http=http, sleep=lambda s: None) == []
+
+
+def test_json_null_body_returns_empty():
+    http = FakeHttp([_Resp("null", 200)])
     assert gdelt_doc.fetch_articles("q", 24, http=http, sleep=lambda s: None) == []
 
 

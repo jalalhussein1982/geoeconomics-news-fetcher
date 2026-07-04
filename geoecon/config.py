@@ -52,6 +52,11 @@ class Config:
     countries_path: str | None = None     # COUNTRIES_PATH; None => config/countries.yaml
     keywords_path: str | None = None      # KEYWORDS_PATH; None => config/keywords.yaml
     gdelt_mode: str = "gkg"               # GDELT_MODE: gkg (legacy files) | docapi (DOC 2.0)
+    # Wave-1 hardening (2026-07-04): throughput + input-bounding knobs.
+    extract_workers: int = 12         # EXTRACT_WORKERS; thread-pool width for body fetches
+    extract_timeout: int = 20         # EXTRACT_TIMEOUT; per-fetch download timeout (s)
+    synth_body_chars: int = 6000      # SYNTH_BODY_CHARS; per-article body cap into synthesis (0 = off)
+    synth_total_chars: int = 30000    # SYNTH_TOTAL_CHARS; per-cluster input cap (0 = off)
     limit: int | None = None
 
     @classmethod
@@ -99,5 +104,9 @@ class Config:
             countries_path=env.get("COUNTRIES_PATH") or None,
             keywords_path=env.get("KEYWORDS_PATH") or None,
             gdelt_mode=env.get("GDELT_MODE", "gkg"),
+            extract_workers=int(env.get("EXTRACT_WORKERS", "12")),
+            extract_timeout=int(env.get("EXTRACT_TIMEOUT", "20")),
+            synth_body_chars=int(env.get("SYNTH_BODY_CHARS", "6000")),
+            synth_total_chars=int(env.get("SYNTH_TOTAL_CHARS", "30000")),
             limit=int(limit) if limit else None,
         )

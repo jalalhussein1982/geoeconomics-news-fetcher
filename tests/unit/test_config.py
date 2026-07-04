@@ -138,3 +138,20 @@ def test_search_discovery_env_overrides():
     assert cfg.countries_path == "/tmp/c.yaml"
     assert cfg.keywords_path == "/tmp/k.yaml"
     assert cfg.gdelt_mode == "docapi"
+
+
+def test_wave1_hardening_defaults():
+    cfg = Config.from_env(dict(_ENV))
+    assert cfg.extract_workers == 12
+    assert cfg.extract_timeout == 20
+    assert cfg.synth_body_chars == 6000
+    assert cfg.synth_total_chars == 30000
+
+
+def test_wave1_hardening_env_overrides():
+    cfg = Config.from_env({**_ENV, "EXTRACT_WORKERS": "4", "EXTRACT_TIMEOUT": "10",
+                           "SYNTH_BODY_CHARS": "0", "SYNTH_TOTAL_CHARS": "5000"})
+    assert cfg.extract_workers == 4
+    assert cfg.extract_timeout == 10
+    assert cfg.synth_body_chars == 0
+    assert cfg.synth_total_chars == 5000

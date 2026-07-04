@@ -32,6 +32,8 @@ BUCKETS: dict[str, set[str]] = {
         "TS",  # Tunisia
         "AG",  # Algeria
         "MO",  # Morocco
+        "SU",  # Sudan
+        "MR",  # Mauritania
     },
     "latam": {
         "BR", "AR", "MX", "CI", "CO", "PE", "VE", "EC", "BL",
@@ -81,7 +83,7 @@ _NAME_TO_FIPS: dict[str, str] = {
     "saudi arabia": "SA", "syria": "SY", "united arab emirates": "AE", "uae": "AE",
     "yemen": "YM", "egypt": "EG", "turkey": "TU", "türkiye": "TU", "cyprus": "CY",
     "west bank": "WE", "palestine": "WE", "gaza": "GZ", "gaza strip": "GZ",
-    "libya": "LY", "tunisia": "TS", "algeria": "AG", "morocco": "MO",
+    "libya": "LY", "tunisia": "TS", "algeria": "AG", "morocco": "MO", "sudan": "SU", "mauritania": "MR",
     "brazil": "BR", "argentina": "AR", "mexico": "MX", "chile": "CI",
     "colombia": "CO", "peru": "PE", "venezuela": "VE", "ecuador": "EC",
     "bolivia": "BL", "paraguay": "PA", "uruguay": "UY", "guatemala": "GT",

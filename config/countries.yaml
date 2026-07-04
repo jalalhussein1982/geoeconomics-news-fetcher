@@ -1,0 +1,56 @@
+# Coverage definition for query-driven discovery (spec 2026-07-04).
+# fips: pipeline country key (matches geoecon/regions.py buckets)
+# gl: Google News ISO country; langs: query languages (keys into keywords.yaml)
+# gdelt_sc: GDELT DOC 2.0 sourcecountry (spaceless name form)
+# global_en: no viable local-language vocabulary -> query the global English
+#   edition with the country name prefixed (e.g. Iran/Farsi).
+# ceid: optional per-lang ceid override when Google's edition id != "GL:hl".
+countries:
+  # ---- Middle East (bucket: middle_east) ----
+  - {fips: BA, name: Bahrain,   gl: BH, langs: [ar], gdelt_sc: bahrain}
+  - {fips: IR, name: Iran,      gl: IR, langs: [],   gdelt_sc: iran, global_en: true}
+  - {fips: IZ, name: Iraq,      gl: IQ, langs: [ar], gdelt_sc: iraq}
+  - {fips: IS, name: Israel,    gl: IL, langs: [he, en], gdelt_sc: israel}
+  - {fips: JO, name: Jordan,    gl: JO, langs: [ar], gdelt_sc: jordan}
+  - {fips: KU, name: Kuwait,    gl: KW, langs: [ar], gdelt_sc: kuwait}
+  - {fips: LE, name: Lebanon,   gl: LB, langs: [ar, fr], gdelt_sc: lebanon}
+  - {fips: MU, name: Oman,      gl: OM, langs: [ar], gdelt_sc: oman}
+  - {fips: QA, name: Qatar,     gl: QA, langs: [ar], gdelt_sc: qatar}
+  - {fips: SA, name: Saudi Arabia, gl: SA, langs: [ar, en], gdelt_sc: saudiarabia}
+  - {fips: SY, name: Syria,     gl: SY, langs: [ar], gdelt_sc: syria}
+  - {fips: AE, name: United Arab Emirates, gl: AE, langs: [ar, en], gdelt_sc: unitedarabemirates}
+  - {fips: YM, name: Yemen,     gl: YE, langs: [ar], gdelt_sc: yemen}
+  - {fips: TU, name: Turkey,    gl: TR, langs: [tr], gdelt_sc: turkey}
+  - {fips: CY, name: Cyprus,    gl: CY, langs: [en], gdelt_sc: cyprus}
+  # WE covers the Palestinian territories incl. Gaza (FIPS GZ intentionally has
+  # no separate entry -- one query space; gate/bucketing still handle GZ rows).
+  - {fips: WE, name: Palestine, gl: PS, langs: [ar], gdelt_sc: palestine}
+  # ---- Egypt: dual-bucketed (middle_east + north_africa) via regions.py ----
+  - {fips: EG, name: Egypt,     gl: EG, langs: [ar, en], gdelt_sc: egypt}
+  # ---- North Africa (bucket: north_africa) ----
+  - {fips: LY, name: Libya,     gl: LY, langs: [ar], gdelt_sc: libya}
+  - {fips: TS, name: Tunisia,   gl: TN, langs: [ar, fr], gdelt_sc: tunisia}
+  - {fips: AG, name: Algeria,   gl: DZ, langs: [ar, fr], gdelt_sc: algeria}
+  - {fips: MO, name: Morocco,   gl: MA, langs: [ar, fr], gdelt_sc: morocco}
+  - {fips: SU, name: Sudan,     gl: SD, langs: [ar], gdelt_sc: sudan}
+  - {fips: MR, name: Mauritania, gl: MR, langs: [ar, fr], gdelt_sc: mauritania}
+  # ---- Latin America (bucket: latam) ----
+  - {fips: BR, name: Brazil,    gl: BR, langs: [pt], gdelt_sc: brazil, ceid: {pt: "BR:pt-419"}}
+  - {fips: AR, name: Argentina, gl: AR, langs: [es], gdelt_sc: argentina}
+  - {fips: MX, name: Mexico,    gl: MX, langs: [es], gdelt_sc: mexico}
+  - {fips: CI, name: Chile,     gl: CL, langs: [es], gdelt_sc: chile}
+  - {fips: CO, name: Colombia,  gl: CO, langs: [es], gdelt_sc: colombia}
+  - {fips: PE, name: Peru,      gl: PE, langs: [es], gdelt_sc: peru}
+  - {fips: VE, name: Venezuela, gl: VE, langs: [es], gdelt_sc: venezuela}
+  - {fips: EC, name: Ecuador,   gl: EC, langs: [es], gdelt_sc: ecuador}
+  - {fips: BL, name: Bolivia,   gl: BO, langs: [es], gdelt_sc: bolivia}
+  - {fips: PA, name: Paraguay,  gl: PY, langs: [es], gdelt_sc: paraguay}
+  - {fips: UY, name: Uruguay,   gl: UY, langs: [es], gdelt_sc: uruguay}
+  - {fips: GT, name: Guatemala, gl: GT, langs: [es], gdelt_sc: guatemala}
+  - {fips: CU, name: Cuba,      gl: CU, langs: [es], gdelt_sc: cuba}
+  - {fips: DR, name: Dominican Republic, gl: DO, langs: [es], gdelt_sc: dominicanrepublic}
+  - {fips: HO, name: Honduras,  gl: HN, langs: [es], gdelt_sc: honduras}
+  - {fips: NU, name: Nicaragua, gl: NI, langs: [es], gdelt_sc: nicaragua}
+  - {fips: CS, name: Costa Rica, gl: CR, langs: [es], gdelt_sc: costarica}
+  - {fips: PM, name: Panama,    gl: PA, langs: [es], gdelt_sc: panama}
+  - {fips: ES, name: El Salvador, gl: SV, langs: [es], gdelt_sc: elsalvador}

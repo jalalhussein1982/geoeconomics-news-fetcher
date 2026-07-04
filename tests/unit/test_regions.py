@@ -12,10 +12,10 @@ def test_new_middle_east_countries_present():
         assert "middle_east" in regions.buckets_for_country(cc)
 
 
-def test_palestine_kept_sudan_dropped():
+def test_palestine_kept_sudan_added_to_north_africa():
     assert "middle_east" in regions.buckets_for_country("WE")  # West Bank
     assert "middle_east" in regions.buckets_for_country("GZ")  # Gaza
-    assert regions.buckets_for_country("SU") == []             # Sudan dropped
+    assert regions.buckets_for_country("SU") == ["north_africa"]  # Sudan now in north_africa
 
 
 def test_latam_unchanged():
@@ -41,7 +41,7 @@ def test_group_by_bucket_duplicates_overlap():
     assert ("a", "EG") in grouped["middle_east"]
     assert ("a", "EG") in grouped["north_africa"]
     assert grouped["latam"] == [("b", "BR")]
-    assert all(("c", "SU") not in v for v in grouped.values())  # Sudan dropped everywhere
+    assert ("c", "SU") in grouped["north_africa"]  # Sudan now in north_africa
 
 
 def test_country_to_fips_names_and_aliases():
@@ -117,3 +117,10 @@ def test_top_per_bucket_cap_none_is_unchanged():
                                            n=12, active=("middle_east",), country_cap=None)
     assert off == explicit_none
     assert len(off["middle_east"]) == 10   # all 10 items, no cap applied
+
+
+def test_sudan_and_mauritania_are_north_africa():
+    assert regions.buckets_for_country("SU") == ["north_africa"]
+    assert regions.buckets_for_country("MR") == ["north_africa"]
+    assert regions.country_to_fips("sudan") == "SU"
+    assert regions.country_to_fips("mauritania") == "MR"

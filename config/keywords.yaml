@@ -1,0 +1,20 @@
+# Query vocabulary (spec 2026-07-04). family1 = economy core; family2 =
+# geopolitics x economy intersection ("economic news framed politically").
+# Recall-biased by design: the LLM gate owns precision. Multi-word terms are
+# pre-quoted. Edit freely -- no code change needed.
+family1:
+  en: [economy, '"central bank"', inflation, GDP, '"interest rate"', currency, '"exchange rate"', exports, trade, debt, investment, budget]
+  ar: [اقتصاد, '"البنك المركزي"', تضخم, '"الناتج المحلي"', '"سعر الفائدة"', عملة, '"سعر الصرف"', صادرات, تجارة, ديون, استثمار, موازنة]
+  es: [economía, '"banco central"', inflación, PIB, '"tasa de interés"', divisa, '"tipo de cambio"', exportaciones, comercio, deuda, inversión, presupuesto]
+  pt: [economia, '"banco central"', inflação, PIB, '"taxa de juros"', câmbio, exportações, comércio, dívida, investimento, orçamento]
+  tr: [ekonomi, '"merkez bankası"', enflasyon, '"faiz oranı"', döviz, kur, ihracat, ticaret, borç, yatırım, bütçe]
+  he: [כלכלה, '"בנק ישראל"', אינפלציה, ריבית, מטבע, '"שער חליפין"', יצוא, סחר, חוב, השקעה, תקציב]
+  fr: [économie, '"banque centrale"', inflation, PIB, '"taux d''intérêt"', devise, '"taux de change"', exportations, commerce, dette, investissement, budget]
+family2:
+  en: [sanctions, tariffs, '"trade war"', embargo, boycott, OPEC, '"export controls"', IMF, '"World Bank"', default, '"debt restructuring"', '"currency swap"', de-dollarization, BRICS, nationalization, '"sovereign wealth fund"', '"trade agreement"']
+  ar: [عقوبات, '"رسوم جمركية"', '"حرب تجارية"', حظر, مقاطعة, أوبك, '"صندوق النقد الدولي"', '"البنك الدولي"', '"تخلف عن السداد"', '"إعادة هيكلة الديون"', تأميم, '"صندوق سيادي"', بريكس, '"اتفاقية تجارية"']
+  es: [sanciones, aranceles, '"guerra comercial"', embargo, boicot, OPEP, FMI, '"Banco Mundial"', '"cesación de pagos"', '"reestructuración de deuda"', nacionalización, '"fondo soberano"', BRICS, '"acuerdo comercial"']
+  pt: [sanções, tarifas, '"guerra comercial"', embargo, boicote, OPEP, FMI, '"Banco Mundial"', calote, '"reestruturação da dívida"', nacionalização, '"fundo soberano"', BRICS, '"acordo comercial"']
+  tr: [yaptırım, '"gümrük vergisi"', '"ticaret savaşı"', ambargo, boykot, OPEC, IMF, '"Dünya Bankası"', temerrüt, '"borç yapılandırması"', kamulaştırma, '"varlık fonu"', BRICS, '"ticaret anlaşması"']
+  he: [סנקציות, מכסים, '"מלחמת סחר"', אמברגו, חרם, '"קרן המטבע"', '"הבנק העולמי"', '"חדלות פירעון"', הלאמה, '"קרן עושר"', BRICS]
+  fr: [sanctions, '"droits de douane"', '"guerre commerciale"', embargo, boycott, OPEP, FMI, '"Banque mondiale"', '"défaut de paiement"', '"restructuration de la dette"', nationalisation, '"fonds souverain"', BRICS, '"accord commercial"']

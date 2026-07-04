@@ -44,7 +44,7 @@ class Source:
     reliability: str | None = None
     notes: str | None = None
     verified: str | None = None
-    status: str | None = None         # live | needs_review | dead
+    status: str | None = None         # live | needs_review | dead | retired
     curated: bool = False             # user-named outlet: eligible for the ranking nudge
     section: str | None = None        # "economy" => economy-desk feed; else None/general
     render: str | None = None         # "firecrawl" => fetch JS-rendered DOM before scraping
@@ -52,8 +52,12 @@ class Source:
 
     @property
     def is_fetchable(self) -> bool:
-        """True if Task 0 has resolved real mechanics and the source is ready."""
-        return self.fetch_type not in SKIP_FETCH_TYPES and self.status != "needs_review"
+        """True if Task 0 has resolved real mechanics and the source is ready.
+
+        `retired` means the search layer now covers this source intentionally —
+        not a gap, so it is excluded here just like `needs_review`.
+        """
+        return self.fetch_type not in SKIP_FETCH_TYPES and self.status not in ("needs_review", "retired")
 
 
 def default_path() -> Path:

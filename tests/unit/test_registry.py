@@ -1,6 +1,7 @@
 import pytest
 
 from geoecon import registry
+from geoecon.registry import Source
 
 _VALID = """
 meta: {schema_version: 1}
@@ -118,3 +119,9 @@ sources:
     # parsed when present
     assert by_id["flagged"].curated is True
     assert by_id["flagged"].section == "economy"
+
+
+def test_retired_is_valid_status_and_not_fetchable():
+    s = Source(id="x", institution="X", tier=2, fetch_type="rss",
+               url="https://x.example", lang="es", status="retired")
+    assert s.is_fetchable is False    # is_fetchable is a @property returning bool

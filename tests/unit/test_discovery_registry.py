@@ -142,6 +142,23 @@ def test_coverage_metrics_and_tier1_recall_floor_warning(caplog):
     assert "wire_live" not in caplog.text     # a live wire does not warn
 
 
+def test_retired_sources_skipped_quietly_and_counted(caplog):
+    sources = [
+        _src(id="w", tier=1, fetch_type="rss", status="retired"),   # retired wire: no warning
+        _src(id="d", fetch_type="rss", status="live", country_fips="SA", bucket="middle_east"),
+    ]
+    items = {"d": [DiscoveredItem(url="https://example.org/d1", title="t")]}
+    repo = FakeRepo()
+    import logging
+    with caplog.at_level(logging.WARNING, logger="geoecon.discovery_registry"):
+        m = discovery_registry.run(_cfg(), repo, 1, sources=sources,
+                                   get_fetcher=_fetcher_for(items), now=NOW)
+    assert m["registry_skipped_retired"] == 1
+    assert m["registry_discovered"] == 1
+    assert not any("recall-floor" in r.message for r in caplog.records)
+    assert m["tier1_held"] == 0                     # retired != held
+
+
 def test_one_bad_source_does_not_abort():
     def boom(src):
         class _F:

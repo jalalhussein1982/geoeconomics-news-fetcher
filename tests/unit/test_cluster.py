@@ -168,3 +168,17 @@ def test_run_flags_false_for_gdelt_only_cluster():
     cluster_stage.run(_CFG, repo, 1, _LLM([]), sources=[])
     c = repo.clusters[0]
     assert c["has_curated"] is False and c["has_economy_section"] is False
+
+
+def test_curated_matches_by_domain_for_search_articles():
+    from geoecon.stages.cluster import curated_match_sets
+    class S:  # minimal source stand-in
+        def __init__(self, id, url, curated): self.id, self.url, self.curated = id, url, curated
+    ids, domains = curated_match_sets([S("a", "https://www.ahram.org.eg/news", True),
+                                       S("b", "https://x.example", False)])
+    assert ids == {"a"}
+    assert domains == {"ahram.org.eg"}
+    class A:  # minimal article stand-in
+        registry_id = None
+        domain = "ahram.org.eg"
+    assert A.registry_id in ids or A.domain in domains

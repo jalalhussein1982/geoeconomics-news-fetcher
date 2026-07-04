@@ -41,7 +41,7 @@ def run(cfg, repo, run_id: int, *, sources=None, get_fetcher=None, now=None) -> 
     # tier misses, so a held wire is a hole in the floor — make it LOUD, not just a
     # metric. A future wire dropping to needs_review/dead trips this too.
     tier1 = [s for s in sources if s.tier == 1]
-    tier1_held = [s for s in tier1 if s.status != "live"]
+    tier1_held = [s for s in tier1 if s.status not in ("live", "retired")]
     for s in tier1_held:
         log.warning("recall-floor: Tier-1 wire %s is NOT fetching (status=%s, fetch_type=%s) "
                     "— a hole in the recall floor", s.id, s.status, s.fetch_type)
@@ -54,7 +54,7 @@ def run(cfg, repo, run_id: int, *, sources=None, get_fetcher=None, now=None) -> 
 
     active_buckets = set(cfg.buckets)
     discovered = 0
-    skipped_unverified = skipped_needs_review = skipped_dead = 0
+    skipped_unverified = skipped_needs_review = skipped_dead = skipped_retired = 0
     per_tier: dict[int, int] = {}
     seen_hashes: set[str] = set()
 
@@ -64,6 +64,9 @@ def run(cfg, repo, run_id: int, *, sources=None, get_fetcher=None, now=None) -> 
             continue
         if src.fetch_type == "dead":
             skipped_dead += 1
+            continue
+        if src.status == "retired":
+            skipped_retired += 1
             continue
         if src.status == "needs_review":
             skipped_needs_review += 1
@@ -116,6 +119,7 @@ def run(cfg, repo, run_id: int, *, sources=None, get_fetcher=None, now=None) -> 
         "registry_discovered": discovered,
         "registry_skipped_unverified": skipped_unverified,
         "registry_skipped_needs_review": skipped_needs_review,
+        "registry_skipped_retired": skipped_retired,
         "registry_per_tier": per_tier,
         # coverage telemetry — first-class, so the redesign's objective is monitorable
         # and a regression (a feed dying, a sitemap going stale) surfaces in a number.

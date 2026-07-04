@@ -99,6 +99,20 @@ def group_events(client, model, country, articles, *, prompt=None):
     return None
 
 
+def curated_match_sets(sources):
+    """(curated registry ids, curated hosts) -- hosts let search-layer articles
+    from a curated outlet keep the ranking nudge after the registry trim."""
+    from urllib.parse import urlsplit
+    ids = {s.id for s in sources if s.curated}
+    domains = set()
+    for s in sources:
+        if s.curated:
+            host = (urlsplit(s.url).hostname or "").removeprefix("www.")
+            if host:
+                domains.add(host)
+    return ids, domains
+
+
 def _lexical_groups(arts, threshold):
     """Per-country fallback: title-token Jaccard union-find -> list of Article groups."""
     toks = [title_tokens(a.title) for a in arts]
@@ -120,7 +134,7 @@ def run(cfg, repo, run_id: int, client, *, sources=None) -> dict:
 
     if sources is None:
         sources = registry.load_sources(getattr(cfg, "sources_path", None))
-    curated_ids = {s.id for s in sources if s.curated}
+    curated_ids, curated_domains = curated_match_sets(sources)
     economy_ids = {s.id for s in sources if s.section == "economy"}
 
     by_country: dict = {}
@@ -149,7 +163,10 @@ def run(cfg, repo, run_id: int, client, *, sources=None) -> dict:
         tier_min = min(tiers) if tiers else None
         has_primary = any(a.source_tier == 0 for a in member_arts)
         distinct_alignments = len({a.state_alignment for a in member_arts if a.state_alignment})
-        has_curated = any(a.registry_id in curated_ids for a in member_arts)
+        has_curated = any(
+            a.registry_id in curated_ids
+            or ((a.domain or "").removeprefix("www.") in curated_domains)
+            for a in member_arts)
         has_economy_section = any(a.registry_id in economy_ids for a in member_arts)
         cid = repo.insert_cluster(
             run_id, fp, primary.region, langs, len(member_arts),

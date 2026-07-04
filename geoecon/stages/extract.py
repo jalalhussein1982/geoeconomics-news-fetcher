@@ -40,16 +40,20 @@ def extract_one(url, *, fetcher):
         return None, None, "headline_only", None
     title = None
     text = None
-    result = trafilatura.extract(downloaded, include_comments=False,
-                                 favor_recall=True, output_format="json",
-                                 with_metadata=True)
-    if result:
-        try:
-            data = json.loads(result)
-            title = data.get("title")
-            text = data.get("text")
-        except (json.JSONDecodeError, AttributeError):
-            pass
+    try:
+        result = trafilatura.extract(downloaded, include_comments=False,
+                                     favor_recall=True, output_format="json",
+                                     with_metadata=True)
+        if result:
+            try:
+                data = json.loads(result)
+                title = data.get("title")
+                text = data.get("text")
+            except (json.JSONDecodeError, AttributeError):
+                pass
+    except Exception as e:
+        log.warning("extract failed %s: %s", url, e)
+        return None, None, "failed", None
     if not text or len(text) < MIN_CHARS:
         return None, title, "headline_only", None
     return text, title, "extracted", None

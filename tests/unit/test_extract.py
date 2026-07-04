@@ -94,3 +94,40 @@ def test_extract_run_serial_still_works():
     counts = extract.run(_cfg(EXTRACT_WORKERS="1"), repo, 1, fetcher=lambda u: _HTML)
     assert counts["extracted"] == 5
     assert len(repo.updates) == 5
+
+
+def test_extract_one_parse_exception_isolated(monkeypatch):
+    # Monkeypatch trafilatura.extract to raise on a specific article
+    original_extract = extract.trafilatura.extract
+    def patched_extract(downloaded, **kwargs):
+        if "BAD_ARTICLE_MARKER" in downloaded:
+            raise RuntimeError("malformed document")
+        return original_extract(downloaded, **kwargs)
+
+    monkeypatch.setattr(extract.trafilatura, "extract", patched_extract)
+
+    # Create 3 articles: two good, one bad
+    good_html = ("<html><head><title>Good Article 1</title></head><body>"
+                 + "<article><h1>Good Article 1</h1><p>"
+                 + ("Good content here. " * 20)
+                 + "</p></article></body></html>")
+    bad_html = ("<html><head><title>Bad Article</title></head><body>"
+                + "BAD_ARTICLE_MARKER"
+                + "<article><h1>Bad Article</h1><p>"
+                + ("This should fail. " * 20)
+                + "</p></article></body></html>")
+
+    def fetcher(url):
+        if url.endswith("/1"):
+            return bad_html
+        return good_html
+
+    arts = [SimpleNamespace(article_id=i, source_url=f"https://x/{i}") for i in (0, 1, 2)]
+    repo = FakeRepo(arts)
+    counts = extract.run(_cfg(EXTRACT_WORKERS="3"), repo, 1, fetcher=fetcher)
+
+    assert counts == {"failed": 1, "headline_only": 0, "extracted": 2}
+    assert len(repo.updates) == 3  # all three articles were processed
+    assert repo.updates[1]["status"] == "failed"
+    assert repo.updates[0]["status"] == "extracted"
+    assert repo.updates[2]["status"] == "extracted"

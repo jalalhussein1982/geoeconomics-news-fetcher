@@ -158,3 +158,66 @@ def test_discovery_caps_per_bucket(monkeypatch):
     metrics = discovery.run(cfg, FakeRepo(), run_id=1, fetch=lambda ws, we: lines)
     assert metrics["discovered"] == 2  # capped at 2 for the middle_east bucket
     assert all(c["country_fips"] == "SA" for c in captured)
+
+
+from datetime import datetime, timedelta, timezone as _tz
+
+from geoecon import gdelt_doc
+from geoecon.config import Config
+from geoecon.search.matrix import CountrySpec
+from geoecon.stages import discovery
+
+
+def _cfg(**over):
+    env = {"DB_DSN": "x", "MAETCENTRUM_KEY": "k", "SMTP_HOST": "h", "SMTP_USER": "u",
+           "SMTP_PASSWORD": "p", "FROM_ADDR": "f", "RECIPIENTS": "r@x"}
+    env.update(over)
+    return Config.from_env(env)
+
+
+class FakeRepo:
+    def __init__(self): self.captured = []
+    def insert_article(self, run_id, **kw):
+        self.captured.append(kw); return len(self.captured)
+
+_NOW = datetime(2026, 7, 4, 7, 0, tzinfo=_tz.utc)
+_EG = CountrySpec(fips="EG", name="Egypt", gl="EG", langs=("ar",), gdelt_sc="egypt")
+_MX = CountrySpec(fips="MX", name="Mexico", gl="MX", langs=("es",), gdelt_sc="mexico")
+
+
+def test_docapi_mode_inserts_with_queried_country():
+    calls = []
+    def doc_fetch(query, timespan_h, **kw):
+        calls.append(query)
+        if "egypt" in query:
+            return [gdelt_doc.DocArticle(url="https://ahram.org.eg/a", title="T",
+                                         domain="ahram.org.eg", language="Arabic",
+                                         seendate=_NOW - timedelta(hours=3))]
+        return []
+    repo = FakeRepo()
+    m = discovery.run(_cfg(GDELT_MODE="docapi"), repo, 1,
+                      doc_fetch=doc_fetch, countries=[_EG, _MX], now=_NOW)
+    assert len(calls) == 2 and calls[0].startswith("sourcecountry:egypt ")
+    kw = repo.captured[0]
+    assert kw["discovery_source"] == "gdelt"
+    assert kw["country_fips"] == "EG"           # attribution from the query, not text
+    assert kw["region"] == "MENA"
+    assert kw["published_at"] == _NOW - timedelta(hours=3)
+    assert m["gdelt_doc_queries"] == 2
+    assert m["discovered"] == 1                  # same headline metric as gkg mode
+
+
+def test_docapi_mode_out_of_window_and_dedup():
+    old = _NOW - timedelta(hours=30)
+    def doc_fetch(query, timespan_h, **kw):
+        return [gdelt_doc.DocArticle(url="https://x.eg/1", title="a", domain="x.eg",
+                                     language="Arabic", seendate=old),
+                gdelt_doc.DocArticle(url="https://x.eg/2", title="b", domain="x.eg",
+                                     language="Arabic", seendate=None),
+                gdelt_doc.DocArticle(url="https://x.eg/2?ref=t", title="dup",
+                                     domain="x.eg", language="Arabic", seendate=None)]
+    repo = FakeRepo()
+    m = discovery.run(_cfg(GDELT_MODE="docapi"), repo, 1,
+                      doc_fetch=doc_fetch, countries=[_EG], now=_NOW)
+    assert [c["source_url"] for c in repo.captured] == ["https://x.eg/2"]
+    assert m["discovered"] == 1

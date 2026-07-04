@@ -85,3 +85,11 @@ def test_limit_caps_feed_budget():
     discovery_search.run(_cfg(LIMIT="5"), repo, 1, providers=[prov],
                          countries=[MX], keywords=KW, now=NOW)
     assert prov.calls[0][3] == 5                          # min(cap, limit)
+
+
+def test_orchestrator_includes_stage_only_when_flag_on():
+    from geoecon.orchestrator import _default_stages
+    names_off = [n for n, _ in _default_stages(_cfg(SEARCH_DISCOVERY="false"), None)]
+    names_on = [n for n, _ in _default_stages(_cfg(), None)]   # _cfg sets it true
+    assert "discovery_search" not in names_off
+    assert names_on.index("discovery_search") == names_on.index("discovery_registry") + 1

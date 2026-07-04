@@ -6,13 +6,14 @@ from .config import Config
 log = logging.getLogger("geoecon.orchestrator")
 
 def _default_stages(cfg, client):
-    from .stages import (discovery, discovery_registry, extract, gate, cluster,
+    from .stages import (discovery, discovery_registry, discovery_search, extract, gate, cluster,
                          synth, summary, render, send)
     from . import regions
     date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     state = {}
     def _discovery(c, r, rid): state["m"] = discovery.run(c, r, rid); return state["m"]
     def _discovery_registry(c, r, rid): return discovery_registry.run(c, r, rid)
+    def _discovery_search(c, r, rid): return discovery_search.run(c, r, rid)
     def _extract(c, r, rid):   return extract.run(c, r, rid)
     def _gate(c, r, rid):      return gate.run(c, r, rid, client)
     def _cluster(c, r, rid):   return cluster.run(c, r, rid, client)
@@ -35,9 +36,13 @@ def _default_stages(cfg, client):
             r.mark_emitted(rid)
             return {"send_status": "sent", "sent": out["results"]}
         raise RuntimeError(f"send: some regions failed to send: {out['results']}")
-    return [("discovery", _discovery), ("discovery_registry", _discovery_registry),
-            ("extraction", _extract), ("gate", _gate), ("cluster", _cluster),
-            ("synthesis", _synth), ("summary", _summary), ("render", _render), ("send", _send)]
+    stages = [("discovery", _discovery), ("discovery_registry", _discovery_registry)]
+    if cfg.search_discovery:
+        stages.append(("discovery_search", _discovery_search))
+    stages += [("extraction", _extract), ("gate", _gate), ("cluster", _cluster),
+               ("synthesis", _synth), ("summary", _summary), ("render", _render),
+               ("send", _send)]
+    return stages
 
 def run_pipeline(cfg: Config, repo, *, now=None, stages=None, client=None) -> dict:
     now = now or datetime.now(timezone.utc)

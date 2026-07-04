@@ -1,8 +1,8 @@
 """RSS/Atom fetcher — parses a feed into DiscoveredItems via feedparser."""
 from __future__ import annotations
 
+import calendar
 import ipaddress
-import time
 from datetime import datetime, timezone
 from urllib.parse import urlparse, urlunparse
 
@@ -18,7 +18,11 @@ def _entry_ts(entry) -> datetime | None:
     if not st:
         return None
     try:
-        return datetime.fromtimestamp(time.mktime(st), tz=timezone.utc)
+        # feedparser's *_parsed struct_time is always UTC, so it must be turned
+        # into epoch seconds with timegm (UTC-aware), never mktime (which treats
+        # the struct as local wall-clock time and shifts it by the host's TZ
+        # offset).
+        return datetime.fromtimestamp(calendar.timegm(st), tz=timezone.utc)
     except (TypeError, ValueError, OverflowError):
         return None
 

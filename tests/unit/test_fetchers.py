@@ -46,9 +46,25 @@ def test_rss_parses_entries_and_ts():
     f = RssFetcher(parse=lambda target, **kw: _FakeParsed(entries))
     items = f.discover(_src(feed_url="https://example.org/feed", lang="ar"))
     assert [i.url for i in items] == ["https://example.org/a", "https://example.org/b"]
-    assert items[0].ts == datetime.fromtimestamp(time.mktime(st), tz=timezone.utc)
+    # 1_700_000_000 epoch seconds is 2023-11-14 22:13:20 UTC -- fixed against the
+    # host's local clock, not derived via time.mktime (which would silently shift
+    # by the host's TZ offset; see test_rss_entry_ts_is_utc_not_host_local below).
+    assert items[0].ts == datetime(2023, 11, 14, 22, 13, 20, tzinfo=timezone.utc)
     assert items[1].ts is None
     assert all(i.source_lang == "ar" for i in items)
+
+
+def test_rss_entry_ts_is_utc_not_host_local():
+    # feedparser's published_parsed/updated_parsed structs are always UTC. A known
+    # GMT instant must round-trip to the identical aware-UTC datetime regardless of
+    # the host machine's timezone (guards against a time.mktime regression, which
+    # treats the struct as local wall-clock time and shifts it by the host's TZ
+    # offset).
+    st = time.struct_time((2024, 3, 1, 12, 0, 0, 0, 0, 0))  # 2024-03-01 12:00:00 GMT
+    entries = [{"link": "https://example.org/c", "title": "C", "published_parsed": st}]
+    f = RssFetcher(parse=lambda target, **kw: _FakeParsed(entries))
+    items = f.discover(_src(feed_url="https://example.org/feed"))
+    assert items[0].ts == datetime(2024, 3, 1, 12, 0, 0, tzinfo=timezone.utc)
 
 
 def test_browser_ua_looks_like_a_browser():

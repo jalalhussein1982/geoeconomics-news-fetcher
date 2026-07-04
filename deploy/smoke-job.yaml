@@ -1,22 +1,21 @@
-# One-off smoke test for the registry redesign (Changes 1–4 + sitemap).
+# One-off smoke test — discovery redesign Phase 4 (search spine flags-on).
 #
 # Mirrors the daily CronJob's pod exactly, but DRY_RUN=true (renders + writes the
-# archive HTML, sends NO email) and LIMIT=30 (cheap, fast). It runs the FULL
-# pipeline minus send — incl. real LLM synthesis — so it validates migrations,
-# registry discovery, the sitemap sources, and the coverage metrics end to end.
-# DRY_RUN means seen_events is NOT touched, so this cannot suppress events for the
-# real daily run.
+# archive HTML, sends NO email) and SEARCH_DISCOVERY=true (the new Google News
+# search spine; retired registry outlets skip). GDELT_MODE stays gkg until the
+# DOC API is validated from the cluster IP. DRY_RUN means seen_events is NOT
+# touched, so this cannot suppress events for the real daily run.
 #
 # Usage:
 #   kubectl apply -f deploy/smoke-job.yaml
 #   kubectl -n hussein-ns logs -f job/geoecon-smoke
-#   # inspect: runs.metrics in Postgres, the archive HTML on the PVC, and the logs for
-#   #   - migrations 004 + 005 applied
-#   #   - registry_discovered > 0, registry_per_tier
-#   #   - core15_primaries_live: 7, tier1_live: 3, tier1_held: 3 (wire_efe recovered)
-#   #   - render:firecrawl live: eg_cb_cbe, actor_imf, eg_mof, actor_worldbank, wire_efe,
-#   #     reg_alarabiya_ar (needs FIRECRAWL_API_KEY in geoecon-secrets)
-#   #   - "recall-floor" WARNINGs now just (wire_ap, wire_reuters_world, actor_china_mofcom)
+#   # inspect: runs.metrics in Postgres, archive HTML on the PVC, and logs for
+#   #   - discovery_search: search_discovered > 0, search_per_provider,
+#   #     search_decode_failures (Google News URL decode health — watch this),
+#   #     search_feeds_failed / search_feeds_empty
+#   #   - registry_skipped_retired: 28 (trim active with flag on)
+#   #   - gate_unparsed_dropped (new cascade telemetry; expect ~0)
+#   #   - extraction wall-clock (EXTRACT_WORKERS=12 now parallel)
 #   # re-run: kubectl -n hussein-ns delete job geoecon-smoke   (then apply again)
 apiVersion: batch/v1
 kind: Job
@@ -38,7 +37,7 @@ spec:
         seccompProfile: { type: RuntimeDefault }
       containers:
         - name: pipeline
-          image: jalalhussein/geoecon-pipeline:20260703-1
+          image: jalalhussein/geoecon-pipeline:20260704-1
           args: ["run"]
           securityContext:
             allowPrivilegeEscalation: false
@@ -66,7 +65,12 @@ spec:
             - name: DRY_RUN
               value: "true"          # render + archive, but do NOT send email
             - name: LIMIT
-              value: "30"            # cap per-bucket discovery so the run is cheap/fast
+              value: "30"            # caps GDELT per-bucket ceiling AND search per-feed budget (min with SEARCH_COUNTRY_CAP)
+            # --- Phase-4 flags under test ---
+            - name: SEARCH_DISCOVERY
+              value: "true"          # Google News search spine ON (registry trim activates)
+            - name: GDELT_MODE
+              value: "gkg"           # flip to docapi only after cluster-IP DOC validation
           resources:
             requests: { cpu: "1", memory: "1Gi" }
             limits: { cpu: "2", memory: "2Gi" }

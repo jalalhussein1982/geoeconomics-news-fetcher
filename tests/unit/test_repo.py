@@ -337,3 +337,15 @@ def test_migration_003_gate_columns_and_stage(repo):
         "SELECT gate_score FROM clusters WHERE run_id=%s", (rid,)).fetchone()[0] is not None
     repo.start_stage(rid, "gate")  # must not raise (CHECK includes 'gate')
     assert "gate" not in repo.completed_stages(rid)
+
+
+@requires_db
+def test_discovery_search_is_allowed_stage_name(repo):
+    # Migration 008 regression guard: the Phase-4 smoke run crashed on
+    # start_stage('discovery_search') because the stage_runs CHECK predated the
+    # search-spine stage (same failure class as migrations 003/006).
+    ws, we, sf = _win()
+    rid = repo.create_run(ws, we, sf, "kimi-k2.6", "task_a_cov")
+    repo.start_stage(rid, "discovery_search")   # must not raise
+    repo.complete_stage(rid, "discovery_search", {"search_discovered": 1})
+    assert "discovery_search" in repo.completed_stages(rid)

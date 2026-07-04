@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import pytest
+from types import SimpleNamespace
+
 from geoecon.stages import synth
 from geoecon.state.models import Article, Cluster
 
@@ -223,3 +225,32 @@ def test_run_default_validator_accepts_good_record():
     assert fields["headline_en"] == "H"
     assert fields["what_happened_en"] is not None and len(fields["what_happened_en"]) >= 60
     assert metrics["records_ok"] == 1
+
+
+# ---------------------------------------------------------------------------
+# Task 4: Synthesis input caps
+# ---------------------------------------------------------------------------
+
+def test_build_messages_caps_body_chars():
+    """Per-article body truncation when body exceeds body_chars."""
+    arts = [SimpleNamespace(source_lang="es", title="T", body="x" * 10000, source_url="u")]
+    msgs = synth.build_messages("P", arts, body_chars=6000)
+    user = msgs[1]["content"]
+    assert "[… truncated]" in user and len(user) < 7000
+
+
+def test_build_messages_total_cap_demotes_tail_to_headline_only():
+    """Cumulative total_chars cap demotes remaining articles to headline-only format."""
+    arts = [SimpleNamespace(source_lang="es", title=f"T{i}", body="x" * 900, source_url=f"u{i}")
+            for i in range(5)]
+    msgs = synth.build_messages("P", arts, body_chars=0, total_chars=2000)
+    user = msgs[1]["content"]
+    assert user.count("HEADLINE-ONLY") >= 2          # tail demoted
+    assert "T0" in user and "x" * 100 in user        # head keeps its body
+
+
+def test_build_messages_zero_caps_is_uncapped():
+    """Zero (default) caps mean unlimited (backward compatible)."""
+    arts = [SimpleNamespace(source_lang="es", title="T", body="x" * 10000, source_url="u")]
+    user = synth.build_messages("P", arts)[1]["content"]
+    assert len(user) > 10000 and "truncated" not in user

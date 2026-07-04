@@ -104,14 +104,40 @@ def parse_record(text: str) -> dict | None:
             return None
 
 
-def build_messages(prompt: str, articles) -> list[dict]:
-    """Build the [system, user] messages list from *prompt* and *articles*."""
+def build_messages(prompt: str, articles, *, body_chars: int = 0, total_chars: int = 0) -> list[dict]:
+    """Build the [system, user] messages list from *prompt* and *articles*.
+
+    Parameters
+    ----------
+    body_chars : int, optional
+        Per-article body character cap (0 = unlimited). Bodies exceeding this are
+        truncated with "[… truncated]" appended.
+    total_chars : int, optional
+        Cumulative character cap for entire input (0 = unlimited). Once exceeded,
+        remaining articles render as headline-only format.
+    """
     parts = []
+    cumulative_len = 0
+
     for a in articles:
-        if a.body:
-            parts.append(f"[{a.source_lang or '?'}] {a.title or ''}\n{a.body}")
-        else:
+        # Check if we've exceeded total_chars cumulative limit
+        if total_chars > 0 and cumulative_len > total_chars:
+            # All remaining articles become headline-only
             parts.append(f"[HEADLINE-ONLY · {a.source_lang or '?'}] {a.title or a.source_url}")
+        elif a.body:
+            body = a.body
+            # Apply per-article body_chars cap
+            if body_chars > 0 and len(body) > body_chars:
+                body = body[:body_chars] + "\n[… truncated]"
+            part = f"[{a.source_lang or '?'}] {a.title or ''}\n{body}"
+            parts.append(part)
+            cumulative_len += len(part)
+        else:
+            # Headline-only articles (no body)
+            part = f"[HEADLINE-ONLY · {a.source_lang or '?'}] {a.title or a.source_url}"
+            parts.append(part)
+            cumulative_len += len(part)
+
     return [
         {"role": "system", "content": prompt},
         {"role": "user",   "content": "\n\n---\n\n".join(parts)},
@@ -168,7 +194,11 @@ def run(cfg, repo, run_id, client, *, prompt: str | None = None,
         headline_only = all(a.body is None for a in articles)
         source_has_figures = not headline_only
 
-        messages = build_messages(prompt, articles)
+        messages = build_messages(
+            prompt, articles,
+            body_chars=getattr(cfg, "synth_body_chars", 0),
+            total_chars=getattr(cfg, "synth_total_chars", 0),
+        )
         resp = client.complete(cfg.synthesis_model, messages,
                                temperature=0, seed=12345, max_tokens=8192)
 

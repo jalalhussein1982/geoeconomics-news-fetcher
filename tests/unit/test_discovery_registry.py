@@ -143,6 +143,8 @@ def test_coverage_metrics_and_tier1_recall_floor_warning(caplog):
 
 
 def test_retired_sources_skipped_quietly_and_counted(caplog):
+    # SEARCH_DISCOVERY on: the search layer has taken over, so retired sources
+    # are quietly trimmed from the registry-discovery stage.
     sources = [
         _src(id="w", tier=1, fetch_type="rss", status="retired"),   # retired wire: no warning
         _src(id="d", fetch_type="rss", status="live", country_fips="SA", bucket="middle_east"),
@@ -151,12 +153,42 @@ def test_retired_sources_skipped_quietly_and_counted(caplog):
     repo = FakeRepo()
     import logging
     with caplog.at_level(logging.WARNING, logger="geoecon.discovery_registry"):
-        m = discovery_registry.run(_cfg(), repo, 1, sources=sources,
+        m = discovery_registry.run(_cfg(SEARCH_DISCOVERY="true"), repo, 1, sources=sources,
                                    get_fetcher=_fetcher_for(items), now=NOW)
     assert m["registry_skipped_retired"] == 1
     assert m["registry_discovered"] == 1
     assert not any("recall-floor" in r.message for r in caplog.records)
-    assert m["tier1_held"] == 0                     # retired != held
+    # retired is intentional, but with the flag on it's not fetching either --
+    # tier1_held now counts it (no recall-floor warning fires for it though).
+    assert m["tier1_held"] == 1
+    assert m["tier1_live"] == 0
+
+
+def test_retired_sources_still_fetch_when_search_discovery_off(caplog):
+    # Default deployed config: SEARCH_DISCOVERY is off, so the search layer isn't
+    # covering retired sources yet -- discovery_registry must keep fetching them,
+    # or 27 actively-fetching sources (all curated outlets + tier-1 wires) go dark.
+    sources = [
+        _src(id="w", tier=1, fetch_type="rss", status="retired"),
+        _src(id="d", fetch_type="rss", status="live", country_fips="SA", bucket="middle_east"),
+    ]
+    items = {
+        "w": [DiscoveredItem(url="https://example.org/w1", title="w")],
+        "d": [DiscoveredItem(url="https://example.org/d1", title="t")],
+    }
+    repo = FakeRepo()
+    import logging
+    with caplog.at_level(logging.WARNING, logger="geoecon.discovery_registry"):
+        m = discovery_registry.run(_cfg(), repo, 1, sources=sources,
+                                   get_fetcher=_fetcher_for(items), now=NOW)
+    assert m["registry_skipped_retired"] == 0
+    assert m["registry_discovered"] == 2
+    assert {c["source_url"] for c in repo.captured} == {
+        "https://example.org/w1", "https://example.org/d1",
+    }
+    assert not any("recall-floor" in r.message for r in caplog.records)
+    assert m["tier1_live"] == 1
+    assert m["tier1_held"] == 0
 
 
 def test_one_bad_source_does_not_abort():

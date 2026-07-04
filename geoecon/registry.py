@@ -54,8 +54,12 @@ class Source:
     def is_fetchable(self) -> bool:
         """True if Task 0 has resolved real mechanics and the source is ready.
 
-        `retired` means the search layer now covers this source intentionally —
-        not a gap, so it is excluded here just like `needs_review`.
+        `retired` means the search layer will cover this source once discovery_search
+        is switched on (SEARCH_DISCOVERY=true) — a deliberate handoff, not a gap. This
+        property doesn't know about that flag, so it always treats `retired` like
+        `needs_review`; the registry-discovery stage (discovery_registry.run) is the
+        one that actually gates the retired-skip on `cfg.search_discovery`, so a
+        retired source keeps fetching there until the flag flips on.
         """
         return self.fetch_type not in SKIP_FETCH_TYPES and self.status not in ("needs_review", "retired")
 

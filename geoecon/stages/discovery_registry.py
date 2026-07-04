@@ -40,7 +40,14 @@ def run(cfg, repo, run_id: int, *, sources=None, get_fetcher=None, now=None) -> 
     # Recall-floor guard: the Tier-1 wire tier exists to catch what every other
     # tier misses, so a held wire is a hole in the floor — make it LOUD, not just a
     # metric. A future wire dropping to needs_review/dead trips this too.
+    # `retired` is intentional in both configs (the search-discovery stage is meant
+    # to cover it once SEARCH_DISCOVERY is on) and never warns; it still fetches
+    # here while the flag is off, see the skip loop below.
     tier1 = [s for s in sources if s.tier == 1]
+    tier1_fetching = [
+        s for s in tier1
+        if s.status == "live" or (s.status == "retired" and not cfg.search_discovery)
+    ]
     tier1_held = [s for s in tier1 if s.status not in ("live", "retired")]
     for s in tier1_held:
         log.warning("recall-floor: Tier-1 wire %s is NOT fetching (status=%s, fetch_type=%s) "
@@ -65,7 +72,7 @@ def run(cfg, repo, run_id: int, *, sources=None, get_fetcher=None, now=None) -> 
         if src.fetch_type == "dead":
             skipped_dead += 1
             continue
-        if src.status == "retired":
+        if src.status == "retired" and cfg.search_discovery:
             skipped_retired += 1
             continue
         if src.status == "needs_review":
@@ -125,8 +132,8 @@ def run(cfg, repo, run_id: int, *, sources=None, get_fetcher=None, now=None) -> 
         # and a regression (a feed dying, a sitemap going stale) surfaces in a number.
         "core15_primaries_live": len(core_live),
         "core15_primaries_total": len(core_countries),
-        "tier1_live": len(tier1) - len(tier1_held),
-        "tier1_held": len(tier1_held),
+        "tier1_live": len(tier1_fetching),
+        "tier1_held": len(tier1) - len(tier1_fetching),
     }
     log.info("discovery_registry: %s", metrics)
     return metrics

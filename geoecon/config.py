@@ -18,13 +18,13 @@ class Config:
     from_addr: str
     recipients: tuple[str, ...]
     llm_base_url: str = "https://llm.ai.e-infra.cz/v1"
-    synthesis_model: str = "kimi-k2.6"
+    synthesis_model: str = "deepseek"
     synthesis_prompt_id: str = "task_a_cov"
     embedding_model: str | None = None
     regions: tuple[str, ...] = ("MENA", "LatAm")
     buckets: tuple[str, ...] = BUCKET_ORDER
-    gate_model: str = "kimi-k2.6"
-    dedup_model: str = "kimi-k2.6"
+    gate_model: str = "deepseek"
+    dedup_model: str = "deepseek"
     gate_batch_size: int = 15
     region_cap: int = 12
     discovery_ceiling: int = 120
@@ -57,6 +57,15 @@ class Config:
     extract_timeout: int = 20         # EXTRACT_TIMEOUT; per-fetch download timeout (s)
     synth_body_chars: int = 6000      # SYNTH_BODY_CHARS; per-article body cap into synthesis (0 = off)
     synth_total_chars: int = 30000    # SYNTH_TOTAL_CHARS; per-cluster input cap (0 = off)
+    # Per-stage LLM output-token budgets. Reasoning models (e.g. kimi-k2.6) spend
+    # part of this budget on hidden reasoning tokens BEFORE any answer text, so a
+    # cap that is too small yields empty/truncated content (finish_reason=length)
+    # -> gate "unparsed", event-grouping failure, stalled synthesis. Raised and made
+    # env-tunable so the model can change without a rebuild. All reversible via env.
+    gate_max_tokens: int = 8192       # GATE_MAX_TOKENS
+    dedup_max_tokens: int = 8192      # DEDUP_MAX_TOKENS (per-country event grouping)
+    synth_max_tokens: int = 16384     # SYNTH_MAX_TOKENS (per-cluster record)
+    summary_max_tokens: int = 8192    # SUMMARY_MAX_TOKENS (per-bucket lede/takeaways)
     limit: int | None = None
 
     @classmethod
@@ -75,13 +84,13 @@ class Config:
             from_addr=env["FROM_ADDR"],
             recipients=_split(env["RECIPIENTS"]),
             llm_base_url=env.get("LLM_BASE_URL", "https://llm.ai.e-infra.cz/v1"),
-            synthesis_model=env.get("SYNTHESIS_MODEL", "kimi-k2.6"),
+            synthesis_model=env.get("SYNTHESIS_MODEL", "deepseek"),
             synthesis_prompt_id=env.get("SYNTHESIS_PROMPT_ID", "task_a_cov"),
             embedding_model=env.get("EMBEDDING_MODEL") or None,
             regions=_split(env.get("REGIONS", "MENA,LatAm")),
             buckets=_split(env.get("BUCKETS", ",".join(BUCKET_ORDER))),
-            gate_model=env.get("GATE_MODEL", "kimi-k2.6"),
-            dedup_model=env.get("DEDUP_MODEL", "kimi-k2.6"),
+            gate_model=env.get("GATE_MODEL", "deepseek"),
+            dedup_model=env.get("DEDUP_MODEL", "deepseek"),
             gate_batch_size=int(env.get("GATE_BATCH_SIZE", "15")),
             region_cap=int(env.get("REGION_CAP", "12")),
             discovery_ceiling=int(env.get("DISCOVERY_CEILING", "120")),
@@ -108,5 +117,9 @@ class Config:
             extract_timeout=int(env.get("EXTRACT_TIMEOUT", "20")),
             synth_body_chars=int(env.get("SYNTH_BODY_CHARS", "6000")),
             synth_total_chars=int(env.get("SYNTH_TOTAL_CHARS", "30000")),
+            gate_max_tokens=int(env.get("GATE_MAX_TOKENS", "8192")),
+            dedup_max_tokens=int(env.get("DEDUP_MAX_TOKENS", "8192")),
+            synth_max_tokens=int(env.get("SYNTH_MAX_TOKENS", "16384")),
+            summary_max_tokens=int(env.get("SUMMARY_MAX_TOKENS", "8192")),
             limit=int(limit) if limit else None,
         )

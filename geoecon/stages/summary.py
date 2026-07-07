@@ -46,7 +46,8 @@ def run(cfg, repo, run_id, client, *, prompt: str | None = None) -> dict:
         records = [t[0] for t in items]
         messages = build_summary_messages(prompt, regions.BUCKET_DISPLAY[bucket], records)
         resp = client.complete(cfg.synthesis_model, messages,
-                               temperature=0, seed=12345, max_tokens=2048)
+                               temperature=0, seed=12345,
+                               max_tokens=getattr(cfg, "summary_max_tokens", 2048))
         data = parse_record(getattr(resp, "final_answer", "") or "") if resp.ok() else None
         if data and isinstance(data.get("takeaways"), list):
             lede, takeaways = data.get("lede"), data.get("takeaways")

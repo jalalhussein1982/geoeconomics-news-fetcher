@@ -81,7 +81,7 @@ def _parse_groups(text, n):
     return groups
 
 
-def group_events(client, model, country, articles, *, prompt=None):
+def group_events(client, model, country, articles, *, prompt=None, max_tokens=2048):
     """Partition one country's articles into event groups via the LLM.
     Returns a list of Article groups, or None on failure (caller falls back)."""
     if prompt is None:
@@ -92,7 +92,7 @@ def group_events(client, model, country, articles, *, prompt=None):
     messages = [{"role": "system", "content": system},
                 {"role": "user", "content": "\n\n".join(parts)}]
     for _ in range(2):
-        resp = client.complete(model, messages, temperature=0, seed=12345, max_tokens=2048)
+        resp = client.complete(model, messages, temperature=0, seed=12345, max_tokens=max_tokens)
         groups = _parse_groups(getattr(resp, "final_answer", "") or "", len(articles)) if resp.ok() else None
         if groups is not None:
             return [[articles[i] for i in g] for g in groups]
@@ -145,7 +145,8 @@ def run(cfg, repo, run_id: int, client, *, sources=None) -> dict:
     for country, c_arts in by_country.items():
         if len(c_arts) == 1:
             groups.append(c_arts); continue
-        g = group_events(client, cfg.dedup_model, country, c_arts)
+        g = group_events(client, cfg.dedup_model, country, c_arts,
+                         max_tokens=getattr(cfg, "dedup_max_tokens", 2048))
         if g is None:
             log.warning("cluster[%s]: LLM grouping failed, lexical fallback", country)
             g = _lexical_groups(c_arts, cfg.dedup_jaccard)

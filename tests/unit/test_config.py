@@ -10,7 +10,7 @@ BASE_ENV = {
 
 def test_from_env_defaults():
     cfg = Config.from_env(BASE_ENV)
-    assert cfg.synthesis_model == "kimi-k2.6"
+    assert cfg.synthesis_model == "deepseek"
     assert cfg.synthesis_prompt_id == "task_a_cov"
     assert cfg.llm_base_url == "https://llm.ai.e-infra.cz/v1"
     assert cfg.window_hours == 24
@@ -53,7 +53,7 @@ def test_buckets_overridable_from_env():
 
 def test_capture_overhaul_defaults():
     cfg = Config.from_env(dict(_ENV))
-    assert cfg.gate_model == "kimi-k2.6"
+    assert cfg.gate_model == "deepseek"
     assert cfg.gate_batch_size == 15
     assert cfg.region_cap == 12
     assert cfg.discovery_ceiling == 120
@@ -83,7 +83,7 @@ def test_dedup_model_default_and_override():
     from geoecon.config import Config
     base = {"DB_DSN": "x", "MAETCENTRUM_KEY": "k", "SMTP_HOST": "h", "SMTP_USER": "u",
             "SMTP_PASSWORD": "p", "FROM_ADDR": "f", "RECIPIENTS": "r@x"}
-    assert Config.from_env(base).dedup_model == "kimi-k2.6"
+    assert Config.from_env(base).dedup_model == "deepseek"
     assert Config.from_env({**base, "DEDUP_MODEL": "kimi-k2.6"}).dedup_model == "kimi-k2.6"
 
 

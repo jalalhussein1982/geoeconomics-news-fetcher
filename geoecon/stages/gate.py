@@ -51,7 +51,8 @@ def _judge(client, cfg, prompt, batch, *, retries: int = 1) -> dict[int, dict] |
     messages = build_gate_messages(prompt, batch)
     for _ in range(1 + retries):
         resp = client.complete(cfg.gate_model, messages,
-                               temperature=0, seed=12345, max_tokens=4096)
+                               temperature=0, seed=12345,
+                               max_tokens=getattr(cfg, "gate_max_tokens", 4096))
         verdicts = parse_verdicts(getattr(resp, "final_answer", "") or "") if resp.ok() else None
         if verdicts is not None:
             by_i = {}

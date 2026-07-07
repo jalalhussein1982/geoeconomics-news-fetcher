@@ -12,6 +12,10 @@ spec:
   jobTemplate:
     spec:
       backoffLimit: 2
+      # Hang-guard: fail a run that exceeds 4h instead of letting it run for many
+      # hours and (with concurrencyPolicy: Forbid) block the next day's run. A
+      # healthy deepseek run finishes in ~1h; this bounds a degraded LLM backend.
+      activeDeadlineSeconds: 14400
       template:
         metadata:
           labels: { app: geoecon }
@@ -66,6 +70,17 @@ spec:
                 # 2026-07-04). Flip to "docapi" only after a clean live probe.
                 - name: GDELT_MODE
                   value: "gkg"
+                # LLM model per stage. deepseek (non-reasoning) is what the prompts
+                # and parsers were tuned for: ~2s/call, clean JSON. A prior live
+                # "modelfix" repointed these to kimi-k2.6 (a reasoning model) whose
+                # ~100s/synthesis-call made runs take 9-18h and miss the daily send;
+                # reverted to deepseek 2026-07-07. Change here to swap the model.
+                - name: GATE_MODEL
+                  value: "deepseek"
+                - name: SYNTHESIS_MODEL
+                  value: "deepseek"
+                - name: DEDUP_MODEL
+                  value: "deepseek"
               resources:
                 requests: { cpu: "1", memory: "1Gi" }
                 limits: { cpu: "2", memory: "2Gi" }

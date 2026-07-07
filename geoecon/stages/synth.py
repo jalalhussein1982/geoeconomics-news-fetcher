@@ -200,7 +200,8 @@ def run(cfg, repo, run_id, client, *, prompt: str | None = None,
             total_chars=getattr(cfg, "synth_total_chars", 0),
         )
         resp = client.complete(cfg.synthesis_model, messages,
-                               temperature=0, seed=12345, max_tokens=8192)
+                               temperature=0, seed=12345,
+                               max_tokens=getattr(cfg, "synth_max_tokens", 8192))
 
         record = parse_record(getattr(resp, "final_answer", "") or "") if resp.ok() else None
 
@@ -211,7 +212,8 @@ def run(cfg, repo, run_id, client, *, prompt: str | None = None,
             if flag != "ok":
                 # One retry on non-ok
                 resp2 = client.complete(cfg.synthesis_model, messages,
-                                        temperature=0, seed=12345, max_tokens=8192)
+                                        temperature=0, seed=12345,
+                                        max_tokens=getattr(cfg, "synth_max_tokens", 8192))
                 record2 = (
                     parse_record(getattr(resp2, "final_answer", "") or "")
                     if resp2.ok() else None

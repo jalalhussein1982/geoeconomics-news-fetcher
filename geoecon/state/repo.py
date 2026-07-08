@@ -316,3 +316,19 @@ class Repo:
             return None
         return {"bucket": row[0], "lede_en": row[1], "takeaways": row[2],
                 "model": row[3], "record_count": row[4]}
+
+    # ---- watchdog (read-only) ----
+    def latest_run_for_window(self, start, end) -> dict | None:
+        row = self.conn.execute(
+            """SELECT run_id, status, started_at, finished_at FROM runs
+               WHERE scheduled_for >= %s AND scheduled_for < %s
+               ORDER BY run_id DESC LIMIT 1""", (start, end)).fetchone()
+        if not row:
+            return None
+        return {"run_id": row[0], "status": row[1], "started_at": row[2], "finished_at": row[3]}
+
+    def failed_stages(self, run_id) -> list[dict]:
+        rows = self.conn.execute(
+            "SELECT stage_name, error FROM stage_runs WHERE run_id=%s AND status='failed'",
+            (run_id,)).fetchall()
+        return [{"stage_name": r[0], "error": r[1]} for r in rows]

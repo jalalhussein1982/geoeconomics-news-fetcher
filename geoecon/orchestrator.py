@@ -123,6 +123,20 @@ def main(argv=None) -> int:
     env = dict(os.environ)
     if args.dry_run: env["DRY_RUN"] = "true"
     if args.limit: env["LIMIT"] = str(args.limit)
+    if args.command == "watchdog":
+        from . import watchdog
+        from .state import db
+        from .state.repo import Repo
+        cfg = Config.from_env(env)
+        try:
+            conn = db.connect(cfg.db_dsn)
+        except Exception as e:
+            log.exception("watchdog: DB connect failed")
+            alerts.send_alert(cfg, "watchdog could not reach DB",
+                              f"DB connect failed: {e!r}\n"
+                              f"Pipeline state unknown — check the cluster and DB pod.\n")
+            return 1
+        return watchdog.run(cfg, Repo(conn))
     cfg, repo, client = _bootstrap(env)
     _install_sigterm_alert(cfg)
     try:

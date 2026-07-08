@@ -1,9 +1,37 @@
 from __future__ import annotations
-import argparse, logging, os, sys
+import argparse, logging, os, signal, sys, traceback
 from datetime import datetime, timedelta, timezone
 from .config import Config
+from . import alerts
 
 log = logging.getLogger("geoecon.orchestrator")
+
+# What the pipeline is doing right now — read by the SIGTERM handler so a
+# deadline-kill alert can name the hung stage.
+_active = {"run_id": None, "stage": None}
+
+
+def _install_sigterm_alert(cfg):
+    """Alert on SIGTERM (k8s activeDeadlineSeconds kill or node drain).
+
+    SystemExit(143) is a BaseException: it passes through both the per-stage
+    `except Exception` (no fail_stage row) and main()'s crash handler (no
+    duplicate alert), terminating the process with the conventional code.
+    """
+    def handler(signum, frame):
+        stage = _active.get("stage") or "startup"
+        alerts.send_alert(
+            cfg, f"run killed (SIGTERM) during {stage}",
+            f"The pipeline pod received SIGTERM — most likely the 4h "
+            f"activeDeadlineSeconds hang-guard killing a stuck run "
+            f"(or node maintenance).\n\n"
+            f"run_id: {_active.get('run_id')}\n"
+            f"stage:  {stage}\n\n"
+            f"The run row stays 'running'/'failed'; the 12:00 watchdog will "
+            f"also report if nothing completes today.\n")
+        raise SystemExit(143)
+    signal.signal(signal.SIGTERM, handler)
+    return handler
 
 def _default_stages(cfg, client):
     from .stages import (discovery, discovery_registry, discovery_search, extract, gate, cluster,
@@ -52,10 +80,12 @@ def run_pipeline(cfg: Config, repo, *, now=None, stages=None, client=None) -> di
     if run_id is None:
         run_id = repo.create_run(window_start, window_end, now,
                                  cfg.synthesis_model, cfg.synthesis_prompt_id, cfg.embedding_model)
+    _active["run_id"] = run_id
     done = repo.completed_stages(run_id)
     stages = stages if stages is not None else _default_stages(cfg, client)
     metrics = {}
     for name, fn in stages:
+        _active["stage"] = name
         if name in done:
             log.info("resume: skipping completed stage %s", name); continue
         repo.start_stage(run_id, name)
@@ -65,6 +95,7 @@ def run_pipeline(cfg: Config, repo, *, now=None, stages=None, client=None) -> di
             repo.fail_stage(run_id, name, e)
             repo.set_run_status(run_id, "failed")
             log.exception("stage %s failed", name)
+            e.geoecon_ctx = {"run_id": run_id, "stage": name}
             raise
         repo.complete_stage(run_id, name, result)
         if isinstance(result, dict):
@@ -72,6 +103,15 @@ def run_pipeline(cfg: Config, repo, *, now=None, stages=None, client=None) -> di
     repo.merge_run_metrics(run_id, metrics)
     repo.set_run_status(run_id, "completed")
     return {"run_id": run_id, "metrics": metrics}
+
+def _bootstrap(env):
+    """Config + DB (with migrations) + LLM client for a pipeline run."""
+    cfg = Config.from_env(env)
+    from .state import db
+    from .state.repo import Repo
+    from .llm.client import LLMClient
+    conn = db.connect(cfg.db_dsn); db.apply_migrations(conn)
+    return cfg, Repo(conn), LLMClient(cfg.llm_base_url, cfg.llm_api_key)
 
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(prog="geoecon")
@@ -83,21 +123,41 @@ def main(argv=None) -> int:
     env = dict(os.environ)
     if args.dry_run: env["DRY_RUN"] = "true"
     if args.limit: env["LIMIT"] = str(args.limit)
-    cfg = Config.from_env(env)
-    from .state import db
-    from .state.repo import Repo
-    from .llm.client import LLMClient
-    conn = db.connect(cfg.db_dsn); db.apply_migrations(conn)
-    repo = Repo(conn)
-    client = LLMClient(cfg.llm_base_url, cfg.llm_api_key)
+    if args.command == "watchdog":
+        from . import watchdog
+        from .state import db
+        from .state.repo import Repo
+        cfg = Config.from_env(env)
+        try:
+            conn = db.connect(cfg.db_dsn)
+        except Exception as e:
+            log.exception("watchdog: DB connect failed")
+            alerts.send_alert(cfg, "watchdog could not reach DB",
+                              f"DB connect failed: {e!r}\n"
+                              f"Pipeline state unknown — check the cluster and DB pod.\n")
+            return 1
+        return watchdog.run(cfg, Repo(conn))
+    cfg, repo, client = _bootstrap(env)
+    _install_sigterm_alert(cfg)
     try:
         out = run_pipeline(cfg, repo, client=client)
         log.info("pipeline done: %s", out)
         return 0
-    except Exception:
+    except Exception as e:
         # Log before exiting — a bare `return 1` made a CheckViolation in
         # start_stage (outside the per-stage handler) a silent exit-1 with no trace.
         log.exception("pipeline failed")
+        ctx = getattr(e, "geoecon_ctx", {})
+        stage = ctx.get("stage", "unknown")
+        alerts.send_alert(
+            cfg, f"pipeline failed at stage {stage}",
+            f"Daily pipeline failed.\n\n"
+            f"stage:  {stage}\n"
+            f"run_id: {ctx.get('run_id', 'unknown')}\n"
+            f"error:  {e!r}\n\n"
+            f"{traceback.format_exc()}\n"
+            f"Logs: kubectl -n hussein-ns logs job/$(kubectl -n hussein-ns get jobs "
+            f"-l app=geoecon --sort-by=.metadata.creationTimestamp -o name | tail -1)\n")
         return 1
 
 if __name__ == "__main__":

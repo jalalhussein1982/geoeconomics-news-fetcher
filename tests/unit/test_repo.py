@@ -349,3 +349,27 @@ def test_discovery_search_is_allowed_stage_name(repo):
     repo.start_stage(rid, "discovery_search")   # must not raise
     repo.complete_stage(rid, "discovery_search", {"search_discovered": 1})
     assert "discovery_search" in repo.completed_stages(rid)
+
+
+@requires_db
+def test_latest_run_for_window_and_failed_stages(repo):
+    ws, we, sf = _win()
+    assert repo.latest_run_for_window(sf - timedelta(hours=12), sf + timedelta(hours=12)) is None
+    rid = repo.create_run(ws, we, sf, "deepseek", "task_a_cov")
+    repo.start_stage(rid, "gate"); repo.fail_stage(rid, "gate", ValueError("gate exploded"))
+    repo.set_run_status(rid, "failed")
+    run = repo.latest_run_for_window(sf - timedelta(hours=12), sf + timedelta(hours=12))
+    assert run["run_id"] == rid and run["status"] == "failed"
+    assert run["started_at"] is not None
+    fails = repo.failed_stages(rid)
+    assert fails == [{"stage_name": "gate", "error": "gate exploded"}]
+    # outside the window -> None
+    assert repo.latest_run_for_window(sf + timedelta(days=2), sf + timedelta(days=3)) is None
+
+@requires_db
+def test_latest_run_for_window_returns_newest(repo):
+    ws, we, sf = _win()
+    repo.create_run(ws, we, sf, "deepseek", "task_a_cov")
+    rid2 = repo.create_run(ws, we, sf, "deepseek", "task_a_cov")
+    run = repo.latest_run_for_window(sf - timedelta(hours=1), sf + timedelta(hours=1))
+    assert run["run_id"] == rid2

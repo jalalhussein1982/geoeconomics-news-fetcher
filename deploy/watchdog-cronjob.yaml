@@ -1,0 +1,50 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: geoecon-watchdog
+  namespace: hussein-ns
+spec:
+  # Dead-man's switch for geoecon-daily (07:00): by 12:00 a healthy run has
+  # long finished (~1h; the 4h activeDeadlineSeconds bounds the worst case at
+  # ~11:00). If no run completed AND sent today, this emails an alert.
+  schedule: "0 12 * * *"
+  timeZone: "Europe/Prague"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 300
+      template:
+        metadata:
+          labels: { app: geoecon-watchdog }
+        spec:
+          restartPolicy: OnFailure
+          # Give the alert email time to finish sending before SIGKILL (SMTP
+          # socket timeout is 30s per call; k8s default grace is only 30s).
+          terminationGracePeriodSeconds: 120
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            seccompProfile: { type: RuntimeDefault }
+          containers:
+            - name: watchdog
+              image: jalalhussein/geoecon-pipeline:20260708-1
+              args: ["watchdog"]
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities: { drop: ["ALL"] }
+              envFrom:
+                - secretRef: { name: geoecon-secrets }
+              env:
+                - name: DB_USER
+                  valueFrom: { secretKeyRef: { name: geoecon-db-app, key: username } }
+                - name: DB_PASS
+                  valueFrom: { secretKeyRef: { name: geoecon-db-app, key: password } }
+                - name: DB_DSN
+                  value: "postgresql://$(DB_USER):$(DB_PASS)@geoecon-db-rw:5432/geoeconomics"
+              resources:
+                requests: { cpu: "100m", memory: "128Mi" }
+                limits: { cpu: "250m", memory: "256Mi" }

@@ -21,6 +21,10 @@ spec:
           labels: { app: geoecon }
         spec:
           restartPolicy: OnFailure
+          # Give the SIGTERM alert email time to finish sending before SIGKILL:
+          # when activeDeadlineSeconds fires, the handler does a blocking SMTP
+          # send (30s socket timeout) and k8s' default 30s grace can cut it off.
+          terminationGracePeriodSeconds: 120
           securityContext:
             runAsNonRoot: true
             runAsUser: 1000

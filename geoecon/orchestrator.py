@@ -6,6 +6,33 @@ from . import alerts
 
 log = logging.getLogger("geoecon.orchestrator")
 
+# What the pipeline is doing right now — read by the SIGTERM handler so a
+# deadline-kill alert can name the hung stage.
+_active = {"run_id": None, "stage": None}
+
+
+def _install_sigterm_alert(cfg):
+    """Alert on SIGTERM (k8s activeDeadlineSeconds kill or node drain).
+
+    SystemExit(143) is a BaseException: it passes through both the per-stage
+    `except Exception` (no fail_stage row) and main()'s crash handler (no
+    duplicate alert), terminating the process with the conventional code.
+    """
+    def handler(signum, frame):
+        stage = _active.get("stage") or "startup"
+        alerts.send_alert(
+            cfg, f"run killed (SIGTERM) during {stage}",
+            f"The pipeline pod received SIGTERM — most likely the 4h "
+            f"activeDeadlineSeconds hang-guard killing a stuck run "
+            f"(or node maintenance).\n\n"
+            f"run_id: {_active.get('run_id')}\n"
+            f"stage:  {stage}\n\n"
+            f"The run row stays 'running'/'failed'; the 12:00 watchdog will "
+            f"also report if nothing completes today.\n")
+        raise SystemExit(143)
+    signal.signal(signal.SIGTERM, handler)
+    return handler
+
 def _default_stages(cfg, client):
     from .stages import (discovery, discovery_registry, discovery_search, extract, gate, cluster,
                          synth, summary, render, send)
@@ -53,10 +80,12 @@ def run_pipeline(cfg: Config, repo, *, now=None, stages=None, client=None) -> di
     if run_id is None:
         run_id = repo.create_run(window_start, window_end, now,
                                  cfg.synthesis_model, cfg.synthesis_prompt_id, cfg.embedding_model)
+    _active["run_id"] = run_id
     done = repo.completed_stages(run_id)
     stages = stages if stages is not None else _default_stages(cfg, client)
     metrics = {}
     for name, fn in stages:
+        _active["stage"] = name
         if name in done:
             log.info("resume: skipping completed stage %s", name); continue
         repo.start_stage(run_id, name)
@@ -95,6 +124,7 @@ def main(argv=None) -> int:
     if args.dry_run: env["DRY_RUN"] = "true"
     if args.limit: env["LIMIT"] = str(args.limit)
     cfg, repo, client = _bootstrap(env)
+    _install_sigterm_alert(cfg)
     try:
         out = run_pipeline(cfg, repo, client=client)
         log.info("pipeline done: %s", out)

@@ -115,3 +115,27 @@ def test_main_sends_crash_alert(monkeypatch):
     assert orchestrator.main(["run"]) == 1
     assert sent["subject"] == "pipeline failed at stage gate"
     assert "run_id: 42" in sent["body"] and "gate exploded" in sent["body"]
+
+
+def test_run_pipeline_tracks_active_stage():
+    seen = []
+    def probe(cfg, repo, rid):
+        seen.append(dict(orchestrator._active)); return {}
+    orchestrator.run_pipeline(_WatchCfg(), _StubRepo(), stages=[("gate", probe)])
+    assert seen == [{"run_id": 42, "stage": "gate"}]
+
+
+def test_sigterm_handler_alerts_and_exits_143(monkeypatch):
+    sent = {}
+    monkeypatch.setattr(alerts, "send_alert",
+                        lambda cfg, subject, body, **kw: sent.update(subject=subject) or True)
+    monkeypatch.setattr(orchestrator, "_active", {"run_id": 7, "stage": "synthesis"})
+    installed = {}
+    monkeypatch.setattr(orchestrator.signal, "signal",
+                        lambda signum, h: installed.update(signum=signum))
+    handler = orchestrator._install_sigterm_alert(object())
+    assert installed["signum"] == orchestrator.signal.SIGTERM
+    with pytest.raises(SystemExit) as ei:
+        handler(15, None)
+    assert ei.value.code == 143
+    assert sent["subject"] == "run killed (SIGTERM) during synthesis"

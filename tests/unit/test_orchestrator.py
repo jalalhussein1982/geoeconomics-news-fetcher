@@ -68,3 +68,50 @@ def test_default_stages_include_summary_in_order():
     assert names.index("discovery") < names.index("discovery_registry") < names.index("extraction")
     assert names.index("extraction") < names.index("gate") < names.index("cluster")
     assert names.index("summary") < names.index("render") < names.index("send")
+
+
+import pytest
+from geoecon import orchestrator, alerts
+
+
+class _WatchCfg:
+    # minimal duck-typed cfg for run_pipeline
+    window_hours = 24
+    synthesis_model = "deepseek"; synthesis_prompt_id = "task_a_cov"; embedding_model = None
+
+
+class _StubRepo:
+    def __init__(self): self.failed = []
+    def find_resumable_run(self, ws, we): return None
+    def create_run(self, *a, **k): return 42
+    def completed_stages(self, rid): return set()
+    def start_stage(self, rid, name): pass
+    def fail_stage(self, rid, name, e): self.failed.append((rid, name))
+    def set_run_status(self, rid, status): pass
+    def complete_stage(self, rid, name, result): pass
+    def merge_run_metrics(self, rid, m): pass
+
+
+def test_stage_failure_attaches_geoecon_ctx():
+    def boom(cfg, repo, rid): raise ValueError("gate exploded")
+    with pytest.raises(ValueError) as ei:
+        orchestrator.run_pipeline(_WatchCfg(), _StubRepo(), stages=[("gate", boom)])
+    assert ei.value.geoecon_ctx == {"run_id": 42, "stage": "gate"}
+
+
+def test_main_sends_crash_alert(monkeypatch):
+    sent = {}
+    monkeypatch.setattr(alerts, "send_alert",
+                        lambda cfg, subject, body, **kw: sent.update(subject=subject, body=body) or True)
+
+    class FakeCfg: dry_run = False
+    def fake_run_pipeline(cfg, repo, client=None):
+        e = RuntimeError("gate exploded")
+        e.geoecon_ctx = {"run_id": 42, "stage": "gate"}
+        raise e
+    monkeypatch.setattr(orchestrator, "run_pipeline", fake_run_pipeline)
+    monkeypatch.setattr(orchestrator, "_bootstrap", lambda env: (FakeCfg(), object(), object()))
+
+    assert orchestrator.main(["run"]) == 1
+    assert sent["subject"] == "pipeline failed at stage gate"
+    assert "run_id: 42" in sent["body"] and "gate exploded" in sent["body"]

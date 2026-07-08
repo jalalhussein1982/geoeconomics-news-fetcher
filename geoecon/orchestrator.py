@@ -1,7 +1,8 @@
 from __future__ import annotations
-import argparse, logging, os, sys
+import argparse, logging, os, signal, sys, traceback
 from datetime import datetime, timedelta, timezone
 from .config import Config
+from . import alerts
 
 log = logging.getLogger("geoecon.orchestrator")
 
@@ -65,6 +66,7 @@ def run_pipeline(cfg: Config, repo, *, now=None, stages=None, client=None) -> di
             repo.fail_stage(run_id, name, e)
             repo.set_run_status(run_id, "failed")
             log.exception("stage %s failed", name)
+            e.geoecon_ctx = {"run_id": run_id, "stage": name}
             raise
         repo.complete_stage(run_id, name, result)
         if isinstance(result, dict):
@@ -72,6 +74,15 @@ def run_pipeline(cfg: Config, repo, *, now=None, stages=None, client=None) -> di
     repo.merge_run_metrics(run_id, metrics)
     repo.set_run_status(run_id, "completed")
     return {"run_id": run_id, "metrics": metrics}
+
+def _bootstrap(env):
+    """Config + DB (with migrations) + LLM client for a pipeline run."""
+    cfg = Config.from_env(env)
+    from .state import db
+    from .state.repo import Repo
+    from .llm.client import LLMClient
+    conn = db.connect(cfg.db_dsn); db.apply_migrations(conn)
+    return cfg, Repo(conn), LLMClient(cfg.llm_base_url, cfg.llm_api_key)
 
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(prog="geoecon")
@@ -83,21 +94,26 @@ def main(argv=None) -> int:
     env = dict(os.environ)
     if args.dry_run: env["DRY_RUN"] = "true"
     if args.limit: env["LIMIT"] = str(args.limit)
-    cfg = Config.from_env(env)
-    from .state import db
-    from .state.repo import Repo
-    from .llm.client import LLMClient
-    conn = db.connect(cfg.db_dsn); db.apply_migrations(conn)
-    repo = Repo(conn)
-    client = LLMClient(cfg.llm_base_url, cfg.llm_api_key)
+    cfg, repo, client = _bootstrap(env)
     try:
         out = run_pipeline(cfg, repo, client=client)
         log.info("pipeline done: %s", out)
         return 0
-    except Exception:
+    except Exception as e:
         # Log before exiting — a bare `return 1` made a CheckViolation in
         # start_stage (outside the per-stage handler) a silent exit-1 with no trace.
         log.exception("pipeline failed")
+        ctx = getattr(e, "geoecon_ctx", {})
+        stage = ctx.get("stage", "unknown")
+        alerts.send_alert(
+            cfg, f"pipeline failed at stage {stage}",
+            f"Daily pipeline failed.\n\n"
+            f"stage:  {stage}\n"
+            f"run_id: {ctx.get('run_id', 'unknown')}\n"
+            f"error:  {e!r}\n\n"
+            f"{traceback.format_exc()}\n"
+            f"Logs: kubectl -n hussein-ns logs job/$(kubectl -n hussein-ns get jobs "
+            f"-l app=geoecon --sort-by=.metadata.creationTimestamp -o name | tail -1)\n")
         return 1
 
 if __name__ == "__main__":

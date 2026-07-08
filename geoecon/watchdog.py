@@ -25,9 +25,10 @@ def check(repo, day_start, day_end) -> dict:
     run = repo.latest_run_for_window(day_start, day_end)
     if run is None:
         return {"ok": False, "subject": "no pipeline run today",
-                "body": ("No run row exists for today — the daily job likely never "
+                "body": ("No run row exists for today — the daily job never "
                          "started (image pull error, missing secret, scheduling "
-                         "problem, cluster issue).\n"
+                         "problem, cluster issue) OR failed during startup before "
+                         "creating a run row (config/DB error) — check the job logs.\n"
                          "Check: kubectl -n hussein-ns get cronjob,jobs,pods\n")}
     if run["status"] == "completed":
         sent = [n for n in repo.newsletters_for_run(run["run_id"])
@@ -59,5 +60,11 @@ def run(cfg, repo, *, now=None) -> int:
         log.info("watchdog: today's run completed and sent — OK")
         return 0
     log.warning("watchdog: %s", verdict["subject"])
-    alerts.send_alert(cfg, "watchdog: " + verdict["subject"], verdict["body"])
-    return 0  # alert delivered == the watchdog did its job
+    # Alert delivered == the watchdog did its job -> exit 0. If the alert email
+    # itself fails to send (e.g. SMTP down at the same time the pipeline is
+    # unhealthy), exit 1 so the Job shows up as failed in `kubectl get jobs`
+    # history — the cheap second signal when the email channel is also dead.
+    if alerts.send_alert(cfg, "watchdog: " + verdict["subject"], verdict["body"]):
+        return 0
+    log.error("watchdog: alert send FAILED for %r — exiting 1", verdict["subject"])
+    return 1

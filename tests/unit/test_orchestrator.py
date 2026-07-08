@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
-from geoecon import orchestrator
+import pytest
+from geoecon import orchestrator, alerts
 
 class FakeRepo:
     def __init__(self, completed=()):
@@ -39,7 +40,6 @@ def test_stage_failure_marks_failed_and_stops():
     repo = FakeRepo()
     def boom(c, r, rid): raise RuntimeError("x")
     stages = [("discovery", boom), ("synthesis", lambda c,r,rid: None)]
-    import pytest
     with pytest.raises(RuntimeError):
         orchestrator.run_pipeline(_cfg(), repo, now=datetime(2026,6,19,5,tzinfo=timezone.utc), stages=stages)
     assert ("fail", "discovery") in repo.calls and repo.status == "failed"
@@ -68,10 +68,6 @@ def test_default_stages_include_summary_in_order():
     assert names.index("discovery") < names.index("discovery_registry") < names.index("extraction")
     assert names.index("extraction") < names.index("gate") < names.index("cluster")
     assert names.index("summary") < names.index("render") < names.index("send")
-
-
-import pytest
-from geoecon import orchestrator, alerts
 
 
 class _WatchCfg:
@@ -111,6 +107,7 @@ def test_main_sends_crash_alert(monkeypatch):
         raise e
     monkeypatch.setattr(orchestrator, "run_pipeline", fake_run_pipeline)
     monkeypatch.setattr(orchestrator, "_bootstrap", lambda env: (FakeCfg(), object(), object()))
+    monkeypatch.setattr(orchestrator, "_install_sigterm_alert", lambda cfg: None)
 
     assert orchestrator.main(["run"]) == 1
     assert sent["subject"] == "pipeline failed at stage gate"

@@ -1,5 +1,4 @@
 from datetime import datetime, timezone
-import pytest
 from geoecon import alerts, watchdog
 
 
@@ -60,6 +59,13 @@ def test_run_sends_alert_only_when_unhealthy(monkeypatch):
     assert watchdog.run(Cfg(), ok_repo, now=now) == 0 and sent == []
     assert watchdog.run(Cfg(), StubRepo(run=None), now=now) == 0
     assert sent == ["watchdog: no pipeline run today"]
+
+
+def test_run_exits_nonzero_when_alert_send_fails(monkeypatch):
+    monkeypatch.setattr(alerts, "send_alert", lambda cfg, subject, body, **kw: False)
+    class Cfg: timezone = "Europe/Prague"
+    now = datetime(2026, 7, 8, 10, 0, tzinfo=timezone.utc)
+    assert watchdog.run(Cfg(), StubRepo(run=None), now=now) == 1
 
 
 def test_cli_dispatch_runs_watchdog_without_migrations(monkeypatch):

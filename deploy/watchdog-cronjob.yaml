@@ -18,7 +18,10 @@ spec:
       activeDeadlineSeconds: 300
       template:
         metadata:
-          labels: { app: geoecon-watchdog }
+          # app: geoecon is REQUIRED — geoecon-db-netpol admits only that label
+          # to Postgres:5432 (2026-07-08 probe with a different label timed out
+          # on DB connect). role: watchdog distinguishes these pods in queries.
+          labels: { app: geoecon, role: watchdog }
         spec:
           restartPolicy: OnFailure
           # Give the alert email time to finish sending before SIGKILL (SMTP

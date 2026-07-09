@@ -91,27 +91,28 @@ def _drop_unparsed(repo, counts, art) -> None:
     counts["gate_unparsed_dropped"] += 1
 
 
-def _judge_per_article(client, cfg, prompt, repo, counts, arts) -> None:
-    """Cascade floor: judge each article alone, no retry. Apply if parsed,
-    otherwise drop unjudged."""
+def _judge_per_article(client, cfg, prompt, arts) -> list:
+    """Cascade floor: judge each article alone, no retry. Pure (LLM only —
+    thread-safe); returns [(article, verdict|None)] where None means the model
+    never produced a usable verdict, even alone."""
+    out = []
     for art in arts:
         by_i = _judge(client, cfg, prompt, [art], retries=0)
-        v = by_i.get(0) if by_i else None
-        if v is None:
-            _drop_unparsed(repo, counts, art)
-        else:
-            _apply_verdict(repo, cfg, counts, art, v)
+        out.append((art, by_i.get(0) if by_i else None))
+    return out
 
 
-def _judge_subbatches(client, cfg, prompt, repo, counts, batch) -> None:
+def _judge_subbatches(client, cfg, prompt, batch) -> list:
     """A full batch was unparsable after its retry. Split into contiguous
     sub-batches of <=5 (order preserved), each judged with one retry; any
-    sub-batch (or index within one) still unresolved falls to per-article."""
+    sub-batch (or index within one) still unresolved falls to per-article.
+    Pure (LLM only); returns [(article, verdict|None)]."""
+    out = []
     for start in range(0, len(batch), 5):
         chunk = batch[start:start + 5]
         by_i = _judge(client, cfg, prompt, chunk, retries=1)
         if by_i is None:
-            _judge_per_article(client, cfg, prompt, repo, counts, chunk)
+            out.extend(_judge_per_article(client, cfg, prompt, chunk))
             continue
         missing = []
         for idx, art in enumerate(chunk):
@@ -119,9 +120,47 @@ def _judge_subbatches(client, cfg, prompt, repo, counts, batch) -> None:
             if v is None:
                 missing.append(art)
             else:
-                _apply_verdict(repo, cfg, counts, art, v)
+                out.append((art, v))
         if missing:
-            _judge_per_article(client, cfg, prompt, repo, counts, missing)
+            out.extend(_judge_per_article(client, cfg, prompt, missing))
+    return out
+
+
+def _gate_batch(client, cfg, prompt, batch) -> tuple[list, int]:
+    """Judge one top-level batch through the full re-gate cascade. Pure — LLM
+    calls only, safe to run in a worker thread. Returns
+    ([(article, verdict|None)], unparsed_count) where unparsed_count preserves
+    the sequential counting semantics: the whole batch when its top-level judge
+    never parsed, else just the indices the model skipped."""
+    by_i = _judge(client, cfg, prompt, batch, retries=1)
+    if by_i is None:
+        # Whole batch unparsable even after retry -> re-gate cascade.
+        return _judge_subbatches(client, cfg, prompt, batch), len(batch)
+    results, missing = [], []
+    for idx, art in enumerate(batch):
+        v = by_i.get(idx)
+        if v is None:
+            missing.append(art)
+        else:
+            results.append((art, v))
+    if missing:
+        # Batch parsed, but the model skipped some indices -> per-article,
+        # never kept unjudged.
+        results.extend(_judge_per_article(client, cfg, prompt, missing))
+    return results, len(missing)
+
+
+def _apply_batch(repo, cfg, counts, batch, outcome) -> None:
+    """Apply one batch's cascade outcome. Main thread only — this is the sole
+    place gate writes to the repo."""
+    results, unparsed = outcome
+    counts["gate_total"] += len(batch)
+    counts["gate_unparsed"] += unparsed
+    for art, v in results:
+        if v is None:
+            _drop_unparsed(repo, counts, art)
+        else:
+            _apply_verdict(repo, cfg, counts, art, v)
 
 
 def run(cfg, repo, run_id, client, *, prompt: str | None = None) -> dict:
@@ -133,30 +172,23 @@ def run(cfg, repo, run_id, client, *, prompt: str | None = None) -> dict:
     counts = {"gate_total": 0, "gate_kept": 0, "gate_dropped": 0,
               "gate_unparsed": 0, "gate_unparsed_dropped": 0}
     bs = max(1, cfg.gate_batch_size)
+    batches = [arts[start:start + bs] for start in range(0, len(arts), bs)]
+    workers = max(1, getattr(cfg, "gate_workers", 4))
 
-    for start in range(0, len(arts), bs):
-        batch = arts[start:start + bs]
-        counts["gate_total"] += len(batch)
-        by_i = _judge(client, cfg, prompt, batch, retries=1)
-
-        if by_i is None:
-            # Whole batch unparsable even after retry -> re-gate cascade.
-            counts["gate_unparsed"] += len(batch)
-            _judge_subbatches(client, cfg, prompt, repo, counts, batch)
-            continue
-
-        missing = []
-        for idx, art in enumerate(batch):
-            v = by_i.get(idx)
-            if v is None:
-                missing.append(art)
-            else:
-                _apply_verdict(repo, cfg, counts, art, v)
-        if missing:
-            # Batch parsed, but the model skipped some indices -> per-article,
-            # never kept unjudged.
-            counts["gate_unparsed"] += len(missing)
-            _judge_per_article(client, cfg, prompt, repo, counts, missing)
+    if workers == 1 or len(batches) <= 1:
+        for batch in batches:
+            _apply_batch(repo, cfg, counts, batch,
+                         _gate_batch(client, cfg, prompt, batch))
+    else:
+        # Batches fan out to threads (LLM round-trips only); every repo write
+        # happens on THIS thread — the psycopg connection is not safe for
+        # concurrent use (same pattern as extract.py).
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        with ThreadPoolExecutor(max_workers=workers) as ex:
+            futs = {ex.submit(_gate_batch, client, cfg, prompt, b): b
+                    for b in batches}
+            for fut in as_completed(futs):
+                _apply_batch(repo, cfg, counts, futs[fut], fut.result())
 
     if counts["gate_unparsed_dropped"] > 0.05 * max(1, counts["gate_total"]):
         log.warning("gate: %d articles dropped unjudged (unparsable model output) "

@@ -254,3 +254,87 @@ def test_build_messages_zero_caps_is_uncapped():
     arts = [SimpleNamespace(source_lang="es", title="T", body="x" * 10000, source_url="u")]
     user = synth.build_messages("P", arts)[1]["content"]
     assert len(user) > 10000 and "truncated" not in user
+
+
+# ---------------------------------------------------------------------------
+# Parallel synthesis: workers>1 must upsert every cluster with correct flags,
+# with all repo writes on the main thread (client calls fan out to threads).
+# ---------------------------------------------------------------------------
+
+def _make_multi_cluster_repo(arts, saved_list, n_clusters):
+    class FakeRepo:
+        def clusters_for_run(self, rid):
+            return [Cluster(100 + i, f"fp{i}", "MENA", ["ar"], 1, False)
+                    for i in range(n_clusters)]
+
+        def articles_in_cluster(self, cid):
+            return arts
+
+        def get_seen(self, fp):
+            return None
+
+        def upsert_synthesis_record(self, rid, cid, fields, flag,
+                                    quality_detail=None, is_headline_only=False):
+            saved_list.append((cid, flag, fields, quality_detail))
+            return 1
+
+    return FakeRepo()
+
+
+def test_run_parallel_workers_persists_every_cluster():
+    arts = _make_arts()
+    saved = []
+    repo = _make_multi_cluster_repo(arts, saved, 7)
+    cfg = type("C", (), {"synthesis_model": "m", "synthesis_prompt_id": "p",
+                         "synth_workers": 4})()
+    metrics = synth.run(
+        cfg, repo, 1, _client(GOOD_BRIEF),
+        prompt="PROMPT",
+        validate=lambda rec, **kw: ("ok", None),
+    )
+    assert metrics["records_total"] == 7
+    assert metrics["records_ok"] == 7
+    assert sorted(cid for cid, *_ in saved) == [100 + i for i in range(7)]
+    assert all(flag == "ok" for _, flag, *_ in saved)
+
+
+def test_run_parallel_workers_holds_bad_records():
+    arts = _make_arts()
+    saved = []
+    repo = _make_multi_cluster_repo(arts, saved, 5)
+    cfg = type("C", (), {"synthesis_model": "m", "synthesis_prompt_id": "p",
+                         "synth_workers": 3})()
+    metrics = synth.run(
+        cfg, repo, 1, _client("not json"),
+        prompt="P",
+        validate=lambda rec, **kw: ("invalid_json", {"why": "x"}),
+    )
+    assert metrics["records_total"] == 5
+    assert metrics["records_held"] == 5
+    assert len(saved) == 5
+    assert all(flag == "invalid_json" for _, flag, *_ in saved)
+
+
+def test_synth_workers_actually_run_concurrently():
+    """Two cluster calls must be in flight at once when synth_workers>1."""
+    import threading
+    barrier = threading.Barrier(2, timeout=10)
+    broken = []
+
+    class BarrierClient:
+        def complete(self, model, messages, **kw):
+            try:
+                barrier.wait()
+            except threading.BrokenBarrierError:
+                broken.append(1)
+            return SimpleNamespace(final_answer=GOOD_BRIEF, ok=lambda: True)
+
+    arts = _make_arts()
+    saved = []
+    repo = _make_multi_cluster_repo(arts, saved, 2)
+    cfg = type("C", (), {"synthesis_model": "m", "synthesis_prompt_id": "p",
+                         "synth_workers": 2})()
+    synth.run(cfg, repo, 1, BarrierClient(), prompt="P",
+              validate=lambda rec, **kw: ("ok", None))
+    assert not broken, "synth clusters ran sequentially — no two LLM calls overlapped"
+    assert len(saved) == 2

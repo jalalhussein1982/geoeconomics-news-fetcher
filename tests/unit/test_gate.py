@@ -153,3 +153,64 @@ def test_build_messages_numbers_items():
     assert msgs[0]["content"] == "SYS"
     assert "[0]" in msgs[1]["content"] and "[1]" in msgs[1]["content"]
     assert "T1" in msgs[1]["content"]
+
+
+def test_gate_parallel_workers_same_results_and_counts():
+    """gate_workers>1 must produce byte-identical verdict application and counts
+    vs sequential — batches fan out to threads, repo writes stay on main thread."""
+    arts = [_art(i, "SA", f"T{i}") for i in range(9)]  # 5 batches of 2 (last=1)
+    answer = ('[{"i":0,"geoeconomic":true,"primary_country":"Saudi Arabia","score":0.9,"reason":"r"},'
+              '{"i":1,"geoeconomic":true,"primary_country":"Saudi Arabia","score":0.9,"reason":"r"}]')
+    cfg = type("C", (), {"gate_model": "m", "gate_batch_size": 2, "gate_workers": 4,
+                         "buckets": ("middle_east", "north_africa", "latam")})()
+    repo = _Repo(arts)
+    counts = gate.run(cfg, repo, 1, _client(answer), prompt="SYS")
+    assert counts == {"gate_total": 9, "gate_kept": 9, "gate_dropped": 0,
+                      "gate_unparsed": 0, "gate_unparsed_dropped": 0}
+    assert len(repo.gates) == 9
+    for i in range(9):
+        assert repo.gates[i]["geoeconomic"] is True
+        assert repo.gates[i]["country_fips"] == "SA"
+
+
+def test_gate_parallel_unparsable_still_cascades_to_drop():
+    """The cascade (unparsable -> subbatch -> per-article -> drop) must survive
+    the parallel path unchanged."""
+    arts = [_art(i, "SA", f"T{i}") for i in range(4)]
+    cfg = type("C", (), {"gate_model": "m", "gate_batch_size": 2, "gate_workers": 3,
+                         "buckets": ("middle_east", "north_africa", "latam")})()
+    repo = _Repo(arts)
+    counts = gate.run(cfg, repo, 1, _client("not json"), prompt="SYS")
+    assert counts["gate_kept"] == 0
+    assert counts["gate_dropped"] == 4
+    assert counts["gate_unparsed"] == 4
+    assert counts["gate_unparsed_dropped"] == 4
+    for i in range(4):
+        assert repo.gates[i]["reason"] == "gate_unparsed_dropped"
+        assert repo.gates[i]["geoeconomic"] is False
+
+
+def test_gate_workers_actually_run_concurrently():
+    """Two batch calls must be in flight at once when gate_workers>1: each call
+    waits on a 2-party barrier that only a concurrent second call can release."""
+    import threading
+    barrier = threading.Barrier(2, timeout=10)
+    broken = []
+    answer = ('[{"i":0,"geoeconomic":true,"primary_country":"Saudi Arabia","score":0.9,"reason":"r"},'
+              '{"i":1,"geoeconomic":true,"primary_country":"Saudi Arabia","score":0.9,"reason":"r"}]')
+
+    class BarrierClient:
+        def complete(self, model, messages, **kw):
+            try:
+                barrier.wait()
+            except threading.BrokenBarrierError:
+                broken.append(1)
+            return SimpleNamespace(final_answer=answer, ok=lambda: True)
+
+    arts = [_art(i, "SA", f"T{i}") for i in range(4)]  # 2 batches of 2
+    cfg = type("C", (), {"gate_model": "m", "gate_batch_size": 2, "gate_workers": 2,
+                         "buckets": ("middle_east", "north_africa", "latam")})()
+    repo = _Repo(arts)
+    counts = gate.run(cfg, repo, 1, BarrierClient(), prompt="SYS")
+    assert not broken, "gate batches ran sequentially — no two LLM calls overlapped"
+    assert counts["gate_kept"] == 4

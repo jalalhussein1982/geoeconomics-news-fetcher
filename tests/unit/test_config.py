@@ -155,3 +155,15 @@ def test_wave1_hardening_env_overrides():
     assert cfg.extract_timeout == 10
     assert cfg.synth_body_chars == 0
     assert cfg.synth_total_chars == 5000
+
+
+def test_llm_workers_defaults():
+    cfg = Config.from_env(dict(_ENV))
+    assert cfg.gate_workers == 4
+    assert cfg.synth_workers == 4
+
+
+def test_llm_workers_env_overrides():
+    cfg = Config.from_env({**_ENV, "GATE_WORKERS": "1", "SYNTH_WORKERS": "8"})
+    assert cfg.gate_workers == 1
+    assert cfg.synth_workers == 8

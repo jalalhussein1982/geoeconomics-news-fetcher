@@ -62,6 +62,12 @@ class Config:
     # cap that is too small yields empty/truncated content (finish_reason=length)
     # -> gate "unparsed", event-grouping failure, stalled synthesis. Raised and made
     # env-tunable so the model can change without a rebuild. All reversible via env.
+    # LLM-call concurrency (2026-07-09): gate+synthesis were ~3h of SEQUENTIAL
+    # calls — the 4h deadline-kill incident. Threads do only the LLM round-trip;
+    # all DB writes stay on the main thread (psycopg conn is not thread-safe).
+    # Set to 1 to restore byte-identical sequential behavior without a rebuild.
+    gate_workers: int = 4             # GATE_WORKERS; concurrent gate batches
+    synth_workers: int = 4            # SYNTH_WORKERS; concurrent cluster syntheses
     gate_max_tokens: int = 8192       # GATE_MAX_TOKENS
     dedup_max_tokens: int = 8192      # DEDUP_MAX_TOKENS (per-country event grouping)
     synth_max_tokens: int = 16384     # SYNTH_MAX_TOKENS (per-cluster record)
@@ -117,6 +123,8 @@ class Config:
             extract_timeout=int(env.get("EXTRACT_TIMEOUT", "20")),
             synth_body_chars=int(env.get("SYNTH_BODY_CHARS", "6000")),
             synth_total_chars=int(env.get("SYNTH_TOTAL_CHARS", "30000")),
+            gate_workers=int(env.get("GATE_WORKERS", "4")),
+            synth_workers=int(env.get("SYNTH_WORKERS", "4")),
             gate_max_tokens=int(env.get("GATE_MAX_TOKENS", "8192")),
             dedup_max_tokens=int(env.get("DEDUP_MAX_TOKENS", "8192")),
             synth_max_tokens=int(env.get("SYNTH_MAX_TOKENS", "16384")),

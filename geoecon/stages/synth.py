@@ -156,6 +156,38 @@ def _default_validate(record: dict, *, source_has_figures: bool = True):
 
 
 # ---------------------------------------------------------------------------
+# Per-cluster synthesis — pure (LLM calls only), safe for worker threads
+# ---------------------------------------------------------------------------
+
+def _synthesize_one(client, cfg, messages, source_has_figures, validate):
+    """One cluster's synthesize -> parse -> validate -> (one retry) chain.
+    No repo access — thread-safe. Returns (record|None, flag, detail)."""
+    resp = client.complete(cfg.synthesis_model, messages,
+                           temperature=0, seed=12345,
+                           max_tokens=getattr(cfg, "synth_max_tokens", 8192))
+    record = parse_record(getattr(resp, "final_answer", "") or "") if resp.ok() else None
+
+    if record is None:
+        return None, "invalid_json", {"error": getattr(resp, "error", "parse failed")}
+
+    flag, detail = validate(record, source_has_figures=source_has_figures)
+    if flag != "ok":
+        # One retry on non-ok
+        resp2 = client.complete(cfg.synthesis_model, messages,
+                                temperature=0, seed=12345,
+                                max_tokens=getattr(cfg, "synth_max_tokens", 8192))
+        record2 = (
+            parse_record(getattr(resp2, "final_answer", "") or "")
+            if resp2.ok() else None
+        )
+        if record2 is not None:
+            f2, d2 = validate(record2, source_has_figures=source_has_figures)
+            if f2 == "ok":
+                record, flag, detail = record2, f2, d2
+    return record, flag, detail
+
+
+# ---------------------------------------------------------------------------
 # Stage entry-point
 # ---------------------------------------------------------------------------
 
@@ -184,6 +216,8 @@ def run(cfg, repo, run_id, client, *, prompt: str | None = None,
 
     counts = {"records_total": 0, "records_ok": 0, "records_held": 0}
 
+    # Pass 1 (main thread, DB reads): collect per-cluster work items.
+    work = []  # (cluster, headline_only, source_has_figures, messages)
     for cl in repo.clusters_for_run(run_id):
         # Seen-store suppression (non-overlap: skip already-emitted clusters)
         seen = repo.get_seen(cl.event_fingerprint)
@@ -199,30 +233,10 @@ def run(cfg, repo, run_id, client, *, prompt: str | None = None,
             body_chars=getattr(cfg, "synth_body_chars", 0),
             total_chars=getattr(cfg, "synth_total_chars", 0),
         )
-        resp = client.complete(cfg.synthesis_model, messages,
-                               temperature=0, seed=12345,
-                               max_tokens=getattr(cfg, "synth_max_tokens", 8192))
+        work.append((cl, headline_only, source_has_figures, messages))
 
-        record = parse_record(getattr(resp, "final_answer", "") or "") if resp.ok() else None
-
-        if record is None:
-            flag, detail = "invalid_json", {"error": getattr(resp, "error", "parse failed")}
-        else:
-            flag, detail = validate(record, source_has_figures=source_has_figures)
-            if flag != "ok":
-                # One retry on non-ok
-                resp2 = client.complete(cfg.synthesis_model, messages,
-                                        temperature=0, seed=12345,
-                                        max_tokens=getattr(cfg, "synth_max_tokens", 8192))
-                record2 = (
-                    parse_record(getattr(resp2, "final_answer", "") or "")
-                    if resp2.ok() else None
-                )
-                if record2 is not None:
-                    f2, d2 = validate(record2, source_has_figures=source_has_figures)
-                    if f2 == "ok":
-                        record, flag, detail = record2, f2, d2
-
+    def _persist(cl, headline_only, outcome):
+        record, flag, detail = outcome
         fields = map_record(record) if record else {}
         repo.upsert_synthesis_record(
             run_id, cl.cluster_id, fields, flag,
@@ -230,6 +244,24 @@ def run(cfg, repo, run_id, client, *, prompt: str | None = None,
         )
         counts["records_total"] += 1
         counts["records_ok" if flag == "ok" else "records_held"] += 1
+
+    # Pass 2: LLM round-trips fan out to threads; every repo write happens on
+    # THIS thread — the psycopg connection is not safe for concurrent use
+    # (same pattern as extract.py).
+    workers = max(1, getattr(cfg, "synth_workers", 4))
+    if workers == 1 or len(work) <= 1:
+        for cl, headline_only, shf, messages in work:
+            _persist(cl, headline_only,
+                     _synthesize_one(client, cfg, messages, shf, validate))
+    else:
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        with ThreadPoolExecutor(max_workers=workers) as ex:
+            futs = {ex.submit(_synthesize_one, client, cfg, messages, shf, validate):
+                    (cl, headline_only)
+                    for cl, headline_only, shf, messages in work}
+            for fut in as_completed(futs):
+                cl, headline_only = futs[fut]
+                _persist(cl, headline_only, fut.result())
 
     log.info("synthesis: %s", counts)
     return counts

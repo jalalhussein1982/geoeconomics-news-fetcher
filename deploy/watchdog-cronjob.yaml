@@ -4,10 +4,12 @@ metadata:
   name: geoecon-watchdog
   namespace: hussein-ns
 spec:
-  # Dead-man's switch for geoecon-daily (07:00): by 12:00 a healthy run has
-  # long finished (~1h; the 4h activeDeadlineSeconds bounds the worst case at
-  # ~11:00). If no run completed AND sent today, this emails an alert.
-  schedule: "0 12 * * *"
+  # Dead-man's switch for geoecon-daily (01:00): a healthy 3-5h run has sent
+  # by ~06:00, so at 07:30 — when the user expects the brief — silence means
+  # sent. Fires on: no run row, run still running (late; the 8h deadline kills
+  # at 09:00), or completed-but-unsent. If no run completed AND sent today,
+  # this emails an alert.
+  schedule: "30 7 * * *"
   timeZone: "Europe/Prague"
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 3

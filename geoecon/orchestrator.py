@@ -22,12 +22,12 @@ def _install_sigterm_alert(cfg):
         stage = _active.get("stage") or "startup"
         alerts.send_alert(
             cfg, f"run killed (SIGTERM) during {stage}",
-            f"The pipeline pod received SIGTERM — most likely the 4h "
+            f"The pipeline pod received SIGTERM — most likely the "
             f"activeDeadlineSeconds hang-guard killing a stuck run "
             f"(or node maintenance).\n\n"
             f"run_id: {_active.get('run_id')}\n"
             f"stage:  {stage}\n\n"
-            f"The run row stays 'running'/'failed'; the 12:00 watchdog will "
+            f"The run row stays 'running'/'failed'; the morning watchdog will "
             f"also report if nothing completes today.\n")
         raise SystemExit(143)
     signal.signal(signal.SIGTERM, handler)

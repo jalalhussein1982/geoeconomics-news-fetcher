@@ -1,6 +1,6 @@
 """Dead-man's switch: alert if today's run did not complete and send.
 
-Runs as `geoecon watchdog` from a small 12:00 Europe/Prague CronJob — catches
+Runs as `geoecon watchdog` from a small 07:30 Europe/Prague CronJob — catches
 the failures in-process hooks never see (job never scheduled, image pull
 error, missing secret) and double-covers crashes and deadline-kills.
 """

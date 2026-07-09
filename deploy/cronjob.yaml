@@ -4,7 +4,11 @@ metadata:
   name: geoecon-daily
   namespace: hussein-ns
 spec:
-  schedule: "0 7 * * *"
+  # 01:00 start so the brief lands in the inbox by ~07:00: a healthy deepseek
+  # run takes 3-5h of sequential LLM calls (gate ~1h + synthesis ~2-3h), so a
+  # 07:00 start delivered mid-day and left no headroom before the hang-guard
+  # (2026-07-09: run 43 killed at 93% of synthesis by the old 4h deadline).
+  schedule: "0 1 * * *"
   timeZone: "Europe/Prague"
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 7
@@ -12,10 +16,11 @@ spec:
   jobTemplate:
     spec:
       backoffLimit: 2
-      # Hang-guard: fail a run that exceeds 4h instead of letting it run for many
-      # hours and (with concurrencyPolicy: Forbid) block the next day's run. A
-      # healthy deepseek run finishes in ~1h; this bounds a degraded LLM backend.
-      activeDeadlineSeconds: 14400
+      # Hang-guard: fail a run that exceeds 8h instead of letting it run for many
+      # hours and (with concurrencyPolicy: Forbid) block the next day's run.
+      # Sized at ~1.6x the worst healthy run (3-5h): kills a kimi-style 9-18h
+      # degraded-LLM stall by 09:00 local, but never a slow-normal run.
+      activeDeadlineSeconds: 28800
       template:
         metadata:
           labels: { app: geoecon }
@@ -90,8 +95,11 @@ spec:
                 - name: DEDUP_MODEL
                   value: "deepseek"
               resources:
-                requests: { cpu: "1", memory: "1Gi" }
-                limits: { cpu: "2", memory: "2Gi" }
+                # 4Gi limit: 2026-07-09 attempt 1 (run 42) died with an
+                # uncatchable SIGKILL during extraction — no error row, no crash
+                # email — consistent with an OOM-kill at the old 2Gi limit.
+                requests: { cpu: "1", memory: "2Gi" }
+                limits: { cpu: "2", memory: "4Gi" }
               volumeMounts:
                 - { name: archive, mountPath: /data/archive }
           volumes:

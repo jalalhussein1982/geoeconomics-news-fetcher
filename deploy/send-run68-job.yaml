@@ -1,0 +1,86 @@
+# One-off: send the already-rendered newsletters for run 68.
+#
+# Run 68 (2026-07-28) was executed with --dry-run so its output could be checked
+# before reaching subscribers: it rendered 3 briefs (latam / middle_east /
+# north_africa, 12 records each) and skipped SMTP. This Job performs only the
+# send step for that existing run — it does NOT re-run the pipeline.
+#
+#   kubectl apply -f deploy/send-run68-job.yaml
+#   kubectl -n hussein-ns logs job/geoecon-send-run68 -f
+#
+# Safe to re-run: send_pending skips any newsletter already marked 'sent'.
+# Delete when done:  kubectl -n hussein-ns delete job geoecon-send-run68
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: geoecon-send-run68
+  namespace: hussein-ns
+  labels: { app: geoecon }
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 600
+  template:
+    metadata:
+      labels: { app: geoecon }   # geoecon-db-netpol admits only this label to Postgres
+    spec:
+      restartPolicy: Never
+      terminationGracePeriodSeconds: 120
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: sender
+          image: jalalhussein/geoecon-pipeline:20260709-1
+          command: ["python", "-c"]
+          args:
+            - |
+              import os, logging
+              logging.basicConfig(level=logging.INFO,
+                                  format="%(asctime)s %(name)s %(levelname)s %(message)s")
+              from geoecon.config import Config
+              from geoecon.state import db
+              from geoecon.state.repo import Repo
+              from geoecon.stages import send
+              from geoecon import regions
+
+              RUN_ID = 68
+              DATE_STR = "2026-07-28"   # matches the date_str render used for run 68
+
+              cfg = Config.from_env(dict(os.environ))
+              repo = Repo(db.connect(cfg.db_dsn))
+              newsletters = repo.newsletters_for_run(RUN_ID)
+              print("recipients:", cfg.recipients)
+              for n in newsletters:
+                  print("  %-14s records=%s status=%s" % (
+                      n.get("bucket"), n.get("record_count"), n.get("send_status")))
+
+              def subject_for(bucket):
+                  display = regions.BUCKET_DISPLAY.get(bucket, bucket or "")
+                  return "Geoeconomic Brief — %s — %s" % (display, DATE_STR)
+
+              out = send.send_pending(cfg, repo, newsletters, subject_for)
+              print("RESULT:", out)
+              if out["all_sent"]:
+                  repo.mark_emitted(RUN_ID)
+                  print("run 68 marked emitted")
+              else:
+                  raise SystemExit("NOT all sent: %r" % (out,))
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: ["ALL"] }
+          envFrom:
+            - secretRef: { name: geoecon-secrets }
+          env:
+            - name: DB_USER
+              valueFrom: { secretKeyRef: { name: geoecon-db-app, key: username } }
+            - name: DB_PASS
+              valueFrom: { secretKeyRef: { name: geoecon-db-app, key: password } }
+            - name: DB_DSN
+              value: "postgresql://$(DB_USER):$(DB_PASS)@geoecon-db-rw:5432/geoeconomics"
+            - name: SOURCES_PATH
+              value: "/app/config/sources.yaml"
+          resources:
+            requests: { cpu: "100m", memory: "256Mi" }
+            limits: { cpu: "500m", memory: "512Mi" }

@@ -16,16 +16,27 @@ spec:
   jobTemplate:
     spec:
       backoffLimit: 2
-      # Hang-guard: fail a run that exceeds 8h instead of letting it run for many
-      # hours and (with concurrencyPolicy: Forbid) block the next day's run.
-      # Sized at ~1.6x the worst healthy run (3-5h): kills a kimi-style 9-18h
-      # degraded-LLM stall by 09:00 local, but never a slow-normal run.
-      activeDeadlineSeconds: 28800
+      # Hang-guard: fail a run that exceeds 5.5h instead of letting it run for
+      # many hours and (with concurrencyPolicy: Forbid) block the next day's run.
+      # 2026-07-29: was 28800 (8h), which from a 23:00Z start fired at 07:00Z =
+      # 09:00 Prague — TWO HOURS AFTER the 07:00 delivery target, so it could
+      # never protect a send (run 67 hung 6h50m and the guard never helped).
+      # 19800 (5.5h) fires 04:30Z / 06:30 Prague, 30 min before delivery.
+      # Healthy runs are 19-137 min, so the margin is still ~2.4x the worst.
+      activeDeadlineSeconds: 19800
       template:
         metadata:
           labels: { app: geoecon }
         spec:
-          restartPolicy: OnFailure
+          # 2026-07-29: was OnFailure. With OnFailure the SAME pod is recycled
+          # in place and the job controller DELETES it once backoffLimit is
+          # exhausted — so when runs 69/70/71 were hard-killed (uncatchable
+          # SIGKILL, no alert, no stage error row) the pod, its termination
+          # reason (OOMKilled vs Evicted vs Error) and all three attempts' logs
+          # were destroyed before anyone could look. `Never` gives each attempt
+          # its own pod and RETAINS the failed ones, so the next occurrence is
+          # diagnosable from `kubectl get pods` + `kubectl logs` alone.
+          restartPolicy: Never
           # Give the SIGTERM alert email time to finish sending before SIGKILL:
           # when activeDeadlineSeconds fires, the handler does a blocking SMTP
           # send (30s socket timeout) and k8s' default 30s grace can cut it off.
@@ -40,7 +51,7 @@ spec:
               # keep in lockstep with watchdog-cronjob.yaml — both need the same
               # alert-code image (the in-process alert hooks live here; tag skew
               # would silently ship a watchdog-only alert layer).
-              image: jalalhussein/geoecon-pipeline:20260708-1
+              image: jalalhussein/geoecon-pipeline:20260709-1
               args: ["run"]
               securityContext:
                 allowPrivilegeEscalation: false
@@ -88,18 +99,51 @@ spec:
                 # "modelfix" repointed these to kimi-k2.6 (a reasoning model) whose
                 # ~100s/synthesis-call made runs take 9-18h and miss the daily send;
                 # reverted to deepseek 2026-07-07. Change here to swap the model.
+                #
+                # 2026-07-28: TEMPORARY swap to gemma4 — the upstream deepseek vLLM
+                # backend is down (frps-proxy-tunnel.vllm-ns unreachable -> HTTP 500
+                # on every call), which silently burned run 67 (all 1602 articles
+                # dropped unjudged, no brief). gemma4 was picked on measurements, not
+                # vibes: 95% gate agreement with deepseek on run-66 ground truth
+                # (27/30 of its keeps, 0 extra keeps), non-reasoning (0 reasoning
+                # tokens, unlike kimi/glm-5/qwen3.5), 0 unparsed. Live run 68 with it:
+                # 317/1593 kept (19.9% vs deepseek's 21.8%), 183/196 synthesis records
+                # ok (93% vs run 66's 61%). Cost: synthesis 33min vs 8min.
+                # REVERT to deepseek once e-INFRA restores the tunnel.
+                #
+                # 2026-07-29 02:18Z re-probe: deepseek is still down and has in
+                # fact degraded — it now returns HTTP 400 "litellm.BadRequestError:
+                # You passed in model=deepseek-v4-pro. There are no healthy
+                # deployments for this model", i.e. the backend is fully
+                # deregistered rather than merely unreachable (was 500 on 07-28).
+                # Note 400 is NOT in LLMClient.RETRYABLE, so it now fails fast
+                # instead of hanging — but it still fails. gemma4 answered in
+                # 0.3s with 0 reasoning tokens. kimi/glm-5/qwen3.5 are up but are
+                # reasoning models (empty content + reasoning_tokens) and are not
+                # drop-in. Keep gemma4; re-probe before reverting.
                 - name: GATE_MODEL
-                  value: "deepseek"
+                  value: "gemma4"
                 - name: SYNTHESIS_MODEL
-                  value: "deepseek"
+                  value: "gemma4"
                 - name: DEDUP_MODEL
-                  value: "deepseek"
+                  value: "gemma4"
               resources:
                 # 4Gi limit: 2026-07-09 attempt 1 (run 42) died with an
                 # uncatchable SIGKILL during extraction — no error row, no crash
                 # email — consistent with an OOM-kill at the old 2Gi limit.
-                requests: { cpu: "1", memory: "2Gi" }
-                limits: { cpu: "2", memory: "4Gi" }
+                #
+                # 2026-07-29: request 2Gi -> 3Gi, limit 4Gi -> 6Gi.
+                # Measured on run 72 (1597 articles, same image/env): the pod
+                # sits at ~1.95Gi from the end of discovery onward and extraction
+                # only adds ~120Mi (peak 1.96Gi). Usage therefore sat AT/ABOVE the
+                # old 2Gi request, which put the pod in kubelet's node-pressure
+                # eviction set (QoS Burstable is ranked by usage-above-request).
+                # A 3Gi request keeps steady-state comfortably BELOW the request
+                # so the pod is protected rather than a first-choice eviction
+                # victim; 6Gi limit keeps spike headroom without hoarding quota
+                # (ns quota: limits.memory 8Gi used / 24Gi hard).
+                requests: { cpu: "1", memory: "3Gi" }
+                limits: { cpu: "2", memory: "6Gi" }
               volumeMounts:
                 - { name: archive, mountPath: /data/archive }
           volumes:

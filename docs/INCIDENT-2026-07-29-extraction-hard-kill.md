@@ -122,11 +122,33 @@ I could not confirm the precise reason (`OOMKilled` vs `Evicted` vs `Error`) bec
 — and with it `lastState.terminated.reason`, all three attempts' logs, and the pod events —
 was deleted by the Job controller before anyone looked. **That is the real bug**, and §5 fixes it.
 
-**This has happened before and was never noticed:** run 62 (2026-07-23 23:00) is orphaned in
-`status='running'` with `extraction:running` and 592 bodies; its pod
-(`geoecon-daily-29747460-tlj7g`) shows `RESTARTS 1`, and run 63 started 4m35s later and
-completed. Same signature, silently absorbed by a retry. Last night the retry budget simply
-ran out.
+### This has been happening for five weeks and nobody ever saw it
+
+Deploying the reconciliation (§6.1) and running it against production turned up far more than
+last night. **8 of the 50 runs since 2026-06-27 — 16% — died silently and were never
+noticed**, each left frozen in `status='running'` forever:
+
+| run | started | died in |
+|---|---|---|
+| 23 | 2026-06-27 03:29 | gate |
+| 33 | 2026-07-04 02:19 | — (before any stage failed) |
+| 34 | 2026-07-04 02:20 | — |
+| 42 | 2026-07-09 05:00 | **extraction** |
+| 43 | 2026-07-09 05:04 | synthesis |
+| 47 | 2026-07-10 23:00 | **extraction** |
+| 54 | 2026-07-16 23:00 | **extraction** |
+| 62 | 2026-07-23 23:00 | **extraction** |
+
+**Five of the eight died in `extraction`**, on 07-09, 07-10, 07-16, 07-23 and then twice on
+07-28/29 (runs 69 and 70). That is a recurring fault on a roughly weekly cadence, and it has
+been accelerating. Every previous occurrence was silently absorbed by a retry that happened
+to land better — run 62's pod (`geoecon-daily-29747460-tlj7g`) shows `RESTARTS 1`, and run 63
+started 4m35s later and completed. Last night was not a new failure; it was the first time the
+retry budget ran out before the fault did.
+
+So this incident is not "a bad node one night". It is a **known-frequency defect that was
+invisible by construction** — which is exactly why §5.1 (retain the evidence) and §6.1 (notice
+the death) matter more than any single tuning change.
 
 ---
 
@@ -259,11 +281,12 @@ deepseek has now been down for two days.
 
 - Runs **62, 69, 70, 71** are still `status='running'` in the DB and will never complete.
   Harmless to the watchdog (it keys off the *latest* run in the day window, which is run 72),
-  but it skews any "successful runs" query. **No manual SQL is needed:** once 6.1 ships, the
-  first pipeline start will close all four out automatically and send one alert naming them.
-  Expect that alert on the first run after the rebuild — it is the fix working, not a new
-  failure. To clear them sooner, run the equivalent `UPDATE runs SET status='failed' …` by
-  hand (it was prepared this session but the write was not approved).
+  ~~but it skews any "successful runs" query.~~ **Done** — 6.1 shipped and was run against
+  production at 03:41Z, which closed out **8** abandoned runs (23, 33, 34, 42, 43, 47, 54, 62)
+  and sent one alert naming them. Runs **69/70/71 were deliberately skipped**: at 03:42Z they
+  were only 4.7h old, inside the 6h safety cutoff, so the guard correctly refused to declare a
+  possibly-live run dead. Tonight's 23:00Z run will close them (they will be ~24h old) and
+  send a second, smaller alert. Both alerts are the fix working, not new failures.
 - `deploy/send-run68-job.yaml` is a completed one-off, kept in the repo as the record of how
   run 68 was salvaged (rendered under `--dry-run`, inspected, then sent). Safe to delete once
   that recovery pattern is no longer wanted as a reference.

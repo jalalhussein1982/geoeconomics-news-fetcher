@@ -51,7 +51,7 @@ spec:
               # keep in lockstep with watchdog-cronjob.yaml — both need the same
               # alert-code image (the in-process alert hooks live here; tag skew
               # would silently ship a watchdog-only alert layer).
-              image: jalalhussein/geoecon-pipeline:20260709-1
+              image: jalalhussein/geoecon-pipeline:20260729-1
               args: ["run"]
               securityContext:
                 allowPrivilegeEscalation: false

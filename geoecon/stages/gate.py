@@ -11,6 +11,20 @@ log = logging.getLogger("geoecon.gate")
 
 _JSON_ARRAY_RE = re.compile(r"\[.*\]", re.S)
 
+# Floors for the end-of-stage health guards (see _assert_gate_is_healthy).
+# Below these counts the run is a --limit/smoke run and the guards stay quiet.
+MIN_TOTAL_FOR_HEALTH_CHECK = 20        # unparsed-majority guard
+MIN_TOTAL_FOR_EMPTY_KEEP_CHECK = 200   # zero-keeps guard (full-size runs only)
+
+
+class NullGateError(RuntimeError):
+    """The gate stage produced no usable verdicts — treat as a stage failure.
+
+    Raised instead of returning `completed` with `gate_kept=0`, so the run ends
+    as `failed` with a real reason in `stage_runs.error` and the crash alert
+    names the true cause, rather than an empty newsletter going out.
+    """
+
 
 def _lead(art, n: int = 400) -> str:
     return (art.body or "")[:n]
@@ -195,4 +209,35 @@ def run(cfg, repo, run_id, client, *, prompt: str | None = None) -> dict:
                     "— systemic LLM issue?", counts["gate_unparsed_dropped"])
 
     log.info("gate: %s", counts)
+    _assert_gate_is_healthy(counts)
     return counts
+
+
+def _assert_gate_is_healthy(counts) -> None:
+    """Fail a run that judged nothing, instead of emitting an empty newsletter.
+
+    Run 67 (2026-07-27) had its LLM backend down for the whole stage: all 1500
+    articles came back `gate_unparsed_dropped`, yet the stage returned
+    `completed` with `gate_kept=0` and handed an empty set to cluster/synthesis.
+    The old `>5%` log.warning above fires only after the stage finishes and is
+    only a log line — nothing acted on it.
+
+    Both guards are floored by article count so a `--limit`/smoke run is never
+    failed by them:
+      * unparsed majority — unambiguous. Parseable-but-negative verdicts are a
+        real answer; UNPARSED output means the model/backend is broken.
+      * zero keeps on a full-size run — historical keep rates are 19-22%, so 0
+        kept out of hundreds has never been a legitimate outcome.
+    """
+    total = counts["gate_total"]
+    if total >= MIN_TOTAL_FOR_HEALTH_CHECK and \
+            counts["gate_unparsed_dropped"] > 0.5 * total:
+        raise NullGateError(
+            f"gate judged nothing: {counts['gate_unparsed_dropped']}/{total} articles "
+            f"dropped unjudged (unparsable model output) — the model or its backend "
+            f"is failing. Refusing to hand an empty article set downstream. {counts}")
+    if total >= MIN_TOTAL_FOR_EMPTY_KEEP_CHECK and counts["gate_kept"] == 0:
+        raise NullGateError(
+            f"gate kept 0 of {total} articles — no full-size run has ever legitimately "
+            f"kept zero (historical keep rate 19-22%). Refusing to emit an empty "
+            f"newsletter. {counts}")

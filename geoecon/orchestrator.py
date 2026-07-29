@@ -1,5 +1,5 @@
 from __future__ import annotations
-import argparse, logging, os, signal, sys, traceback
+import argparse, logging, os, signal, sys, time, traceback
 from datetime import datetime, timedelta, timezone
 from .config import Config
 from . import alerts
@@ -11,27 +11,96 @@ log = logging.getLogger("geoecon.orchestrator")
 _active = {"run_id": None, "stage": None}
 
 
-def _install_sigterm_alert(cfg):
-    """Alert on SIGTERM (k8s activeDeadlineSeconds kill or node drain).
+def _install_sigterm_alert(cfg, *, clock=time.monotonic):
+    """Alert on SIGTERM (deadline kill, node drain, or the Job giving up).
 
     SystemExit(143) is a BaseException: it passes through both the per-stage
     `except Exception` (no fail_stage row) and main()'s crash handler (no
     duplicate alert), terminating the process with the conventional code.
+
+    The handler CANNOT know why SIGTERM arrived, so it must not guess. It
+    previously asserted "most likely the activeDeadlineSeconds hang-guard",
+    which on 2026-07-29 was sent for a job that had lived 5m52s against an 8h
+    deadline — the reader went looking for a hang that never happened. Report
+    elapsed wall-clock instead: that single number distinguishes a deadline kill
+    from a backoff-limit collapse, and it is the one fact the handler owns.
     """
+    t0 = clock()
+
     def handler(signum, frame):
         stage = _active.get("stage") or "startup"
+        h, rem = divmod(int(clock() - t0), 3600)
+        m, s = divmod(rem, 60)
+        elapsed = f"{h}h{m:02d}m{s:02d}s"
         alerts.send_alert(
             cfg, f"run killed (SIGTERM) during {stage}",
-            f"The pipeline pod received SIGTERM — most likely the "
-            f"activeDeadlineSeconds hang-guard killing a stuck run "
-            f"(or node maintenance).\n\n"
-            f"run_id: {_active.get('run_id')}\n"
-            f"stage:  {stage}\n\n"
+            f"The pipeline pod received SIGTERM after {elapsed} of wall-clock.\n\n"
+            f"run_id:  {_active.get('run_id')}\n"
+            f"stage:   {stage}\n"
+            f"elapsed: {elapsed}\n\n"
+            f"Compare `elapsed` against activeDeadlineSeconds before assuming a hang:\n"
+            f"  - close to the deadline -> the hang-guard killed a genuinely stuck run\n"
+            f"  - far short of it       -> the Job itself gave up (backoffLimit exhausted\n"
+            f"    by EARLIER attempts that died), or a node drain/eviction, or a manual\n"
+            f"    delete. In that case this run is a symptom, not the failure.\n\n"
+            f"Attempts killed by SIGKILL (OOM / node-pressure eviction) send NO alert at\n"
+            f"all and leave their run row in 'running'. Always check for siblings:\n"
+            f"  kubectl -n hussein-ns get pods -l app=geoecon\n"
+            f"  kubectl -n hussein-ns get jobs -l app=geoecon\n\n"
             f"The run row stays 'running'/'failed'; the morning watchdog will "
             f"also report if nothing completes today.\n")
         raise SystemExit(143)
     signal.signal(signal.SIGTERM, handler)
     return handler
+
+def reconcile_abandoned_runs(cfg, repo, *, now=None, max_age_hours=6) -> int:
+    """Close out runs whose process died without unwinding, and alert once.
+
+    An uncatchable SIGKILL — cgroup OOM, kubelet node-pressure eviction, node
+    loss — runs no handler at all: no `fail_stage` row, no crash alert, no
+    SIGTERM alert. The run row is simply orphaned in 'running' forever. On
+    2026-07-29 that hid three consecutive kills (runs 69/70/71); run 62 had been
+    sitting orphaned since 2026-07-23 and nobody noticed. Since the dying
+    process cannot report, the NEXT process to start has to.
+
+    `max_age_hours` must exceed activeDeadlineSeconds (5.5h) so a pipeline that
+    is legitimately still running is never mistaken for an abandoned one.
+
+    Best-effort by contract: never raises, so a reconciliation problem can never
+    stop today's pipeline. Returns the number of runs closed out.
+    """
+    now = now or datetime.now(timezone.utc)
+    cutoff = now - timedelta(hours=max_age_hours)
+    try:
+        stale = repo.stale_running_runs(cutoff)
+        if not stale:
+            return 0
+        note = (f"abandoned: still 'running' with no progress since before {cutoff:%Y-%m-%d %H:%M}Z; "
+                f"process died without unwinding (uncatchable SIGKILL — OOM / node-pressure "
+                f"eviction / node loss). Closed out by reconciliation at {now:%Y-%m-%d %H:%M}Z.")
+        for r in stale:
+            repo.mark_run_failed(r["run_id"], note)
+        listing = "\n".join(f"  run {r['run_id']}  started {r['started_at']}" for r in stale)
+        log.error("reconciled %d abandoned run(s):\n%s", len(stale), listing)
+        alerts.send_alert(
+            cfg, f"{len(stale)} abandoned run(s) found and closed out",
+            f"These runs were left in 'running' by a process that died without "
+            f"unwinding — an uncatchable SIGKILL (OOM / node-pressure eviction / "
+            f"node loss), which runs no handler and therefore sends no alert of "
+            f"its own:\n\n{listing}\n\n"
+            f"They have been marked 'failed'. Each one is a pipeline run that "
+            f"produced nothing and told no one at the time.\n\n"
+            f"Check the pod's termination reason (the job template uses "
+            f"restartPolicy: Never so failed pods are retained):\n"
+            f"  kubectl -n hussein-ns get pods -l app=geoecon\n"
+            f"  kubectl -n hussein-ns get pods -l app=geoecon -o jsonpath="
+            f"'{{range .items[*]}}{{.metadata.name}}{{\" \"}}"
+            f"{{.status.containerStatuses[*].state.terminated.reason}}{{\"\\n\"}}{{end}}'\n")
+        return len(stale)
+    except Exception:
+        log.exception("reconciliation failed (continuing — this must never block a run)")
+        return 0
+
 
 def _default_stages(cfg, client):
     from .stages import (discovery, discovery_registry, discovery_search, extract, gate, cluster,
@@ -139,6 +208,9 @@ def main(argv=None) -> int:
         return watchdog.run(cfg, Repo(conn))
     cfg, repo, client = _bootstrap(env)
     _install_sigterm_alert(cfg)
+    # Report any run orphaned by a previous process that was SIGKILLed. Runs
+    # before the pipeline so the alert goes out even if today's run then fails.
+    reconcile_abandoned_runs(cfg, repo)
     try:
         out = run_pipeline(cfg, repo, client=client)
         log.info("pipeline done: %s", out)

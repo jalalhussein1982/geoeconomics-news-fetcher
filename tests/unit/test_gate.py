@@ -1,3 +1,4 @@
+import pytest
 from types import SimpleNamespace
 
 from geoecon.stages import gate
@@ -127,6 +128,53 @@ def test_totally_unparsable_drops_not_keeps():
         assert repo.gates[i]["geoeconomic"] is False
         assert repo.gates[i]["country_fips"] is None
         assert repo.gates[i]["score"] == 0.0
+
+
+def _big_cfg(bs=10):
+    return type("C", (), {"gate_model": "m", "gate_batch_size": bs,
+                          "buckets": ("middle_east", "north_africa", "latam")})()
+
+
+def test_gate_raises_when_a_real_run_is_entirely_unjudged():
+    """2026-07-27 run 67: the deepseek backend was down, all 1500 articles came
+    back `gate_unparsed_dropped`, and gate still returned status=completed with
+    gate_kept=0 — handing an empty article set to cluster/synthesis. A run that
+    judged nothing must fail loudly, not emit an empty newsletter."""
+    arts = [_art(i, "SA", f"T{i}") for i in range(gate.MIN_TOTAL_FOR_HEALTH_CHECK)]
+    repo = _Repo(arts)
+    client = ScriptedClient([])          # every call falls back to "garbage"
+
+    with pytest.raises(gate.NullGateError) as ei:
+        gate.run(_big_cfg(), repo, 1, client, prompt="SYS")
+
+    assert "unjudged" in str(ei.value).lower()
+    # verdicts are still persisted before the raise — the evidence survives
+    assert len(repo.gates) == gate.MIN_TOTAL_FOR_HEALTH_CHECK
+    assert all(v["reason"] == "gate_unparsed_dropped" for v in repo.gates.values())
+
+
+def test_gate_does_not_raise_on_a_small_limited_run():
+    """`--limit` / smoke runs judge a handful of articles; a low count is not
+    evidence of a systemic outage, so the guard must not fire below the floor."""
+    n = gate.MIN_TOTAL_FOR_HEALTH_CHECK - 1
+    arts = [_art(i, "SA", f"T{i}") for i in range(n)]
+    repo = _Repo(arts)
+    counts = gate.run(_big_cfg(), repo, 1, client=ScriptedClient([]), prompt="SYS")
+    assert counts["gate_kept"] == 0 and counts["gate_unparsed_dropped"] == n
+
+
+def test_gate_does_not_raise_when_model_legitimately_drops_everything():
+    """All-dropped with clean, parseable verdicts is a real answer (quiet day /
+    off-topic batch), not an outage. Only UNPARSED output implies a broken model."""
+    n = gate.MIN_TOTAL_FOR_HEALTH_CHECK
+    arts = [_art(i, "SA", f"T{i}") for i in range(n)]
+    repo = _Repo(arts)
+    verdicts = "[" + ",".join(
+        f'{{"i":{i},"geoeconomic":false,"primary_country":null,"score":0.0,"reason":"off-topic"}}'
+        for i in range(n)) + "]"
+    counts = gate.run(_big_cfg(bs=n), repo, 1, ScriptedClient([verdicts]), prompt="SYS")
+    assert counts["gate_kept"] == 0
+    assert counts["gate_unparsed_dropped"] == 0
 
 
 def test_missing_index_goes_to_per_article_not_keep():

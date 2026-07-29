@@ -136,3 +136,73 @@ def test_sigterm_handler_alerts_and_exits_143(monkeypatch):
         handler(15, None)
     assert ei.value.code == 143
     assert sent["subject"] == "run killed (SIGTERM) during synthesis"
+
+
+class _ReconcileRepo:
+    def __init__(self, stale=()):
+        self._stale = list(stale); self.failed = []; self.cutoff = None
+    def stale_running_runs(self, cutoff):
+        self.cutoff = cutoff; return list(self._stale)
+    def mark_run_failed(self, run_id, note):
+        self.failed.append((run_id, note))
+
+
+def test_reconcile_marks_abandoned_runs_and_alerts(monkeypatch):
+    """2026-07-29: runs 69/70/71 were SIGKILLed mid-extraction. SIGKILL is
+    uncatchable, so no handler ran: no stage error, no alert, and the run rows
+    sat in 'running' forever (run 62 had been sitting there since 07-23,
+    unnoticed). This is the only failure class with zero signal — the next
+    process to start must notice and say so."""
+    sent = {}
+    monkeypatch.setattr(alerts, "send_alert",
+                        lambda cfg, subject, body, **kw: sent.update(subject=subject, body=body) or True)
+    repo = _ReconcileRepo(stale=[{"run_id": 69, "status": "running",
+                                  "started_at": datetime(2026, 7, 28, 23, 0, tzinfo=timezone.utc)}])
+    now = datetime(2026, 7, 29, 6, 0, tzinfo=timezone.utc)
+
+    n = orchestrator.reconcile_abandoned_runs(_cfg(), repo, now=now, max_age_hours=6)
+
+    assert n == 1
+    assert repo.failed and repo.failed[0][0] == 69
+    assert "69" in sent["body"]
+    assert "SIGKILL" in sent["body"] or "disappear" in sent["body"].lower()
+    assert repo.cutoff == datetime(2026, 7, 29, 0, 0, tzinfo=timezone.utc)
+
+
+def test_reconcile_is_quiet_and_sends_nothing_when_clean(monkeypatch):
+    monkeypatch.setattr(alerts, "send_alert",
+                        lambda *a, **k: (_ for _ in ()).throw(AssertionError("must not alert")))
+    repo = _ReconcileRepo(stale=[])
+    assert orchestrator.reconcile_abandoned_runs(_cfg(), repo,
+                                                 now=datetime(2026, 7, 29, tzinfo=timezone.utc)) == 0
+    assert repo.failed == []
+
+
+def test_reconcile_never_blocks_the_run(monkeypatch):
+    """Best-effort: a reconciliation failure must not stop today's pipeline."""
+    class Boom:
+        def stale_running_runs(self, cutoff): raise RuntimeError("db hiccup")
+    assert orchestrator.reconcile_abandoned_runs(_cfg(), Boom(),
+                                                 now=datetime(2026, 7, 29, tzinfo=timezone.utc)) == 0
+
+
+def test_sigterm_alert_reports_elapsed_and_does_not_guess_the_cause(monkeypatch):
+    """2026-07-29: the handler asserted 'most likely the activeDeadlineSeconds
+    hang-guard' on a job that had lived 5m52s against an 8h deadline, sending the
+    reader after a hang that never happened. It cannot know why SIGTERM arrived;
+    it must report elapsed wall-clock and let the reader compare."""
+    sent = {}
+    monkeypatch.setattr(alerts, "send_alert",
+                        lambda cfg, subject, body, **kw: sent.update(body=body) or True)
+    monkeypatch.setattr(orchestrator, "_active", {"run_id": 71, "stage": "discovery"})
+    monkeypatch.setattr(orchestrator.signal, "signal", lambda signum, h: None)
+
+    ticks = iter([1000.0, 1352.0])            # install, then handler -> 5m52s
+    handler = orchestrator._install_sigterm_alert(object(), clock=lambda: next(ticks))
+    with pytest.raises(SystemExit):
+        handler(15, None)
+
+    body = sent["body"]
+    assert "0h05m52s" in body, body            # the fact that falsifies 'hang-guard'
+    assert "most likely" not in body.lower(), body
+    assert "71" in body and "discovery" in body

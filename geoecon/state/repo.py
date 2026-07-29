@@ -26,6 +26,37 @@ class Repo:
                ORDER BY run_id DESC LIMIT 1""", (window_start, window_end)).fetchone()
         return row[0] if row else None
 
+    def stale_running_runs(self, cutoff) -> list[dict]:
+        """Runs still marked 'running' that started before `cutoff`.
+
+        These are runs whose process died without unwinding — an uncatchable
+        SIGKILL (OOM / node-pressure eviction), a node loss, or a hard crash.
+        Nothing in-process can record such a death, so they accumulate silently
+        (runs 62, 69, 70, 71 all sat in 'running'). `cutoff` must be older than
+        the job's activeDeadlineSeconds so a legitimately-running pipeline is
+        never mistaken for an abandoned one.
+        """
+        rows = self.conn.execute(
+            """SELECT run_id, status, started_at FROM runs
+               WHERE status='running' AND started_at < %s
+               ORDER BY run_id""", (cutoff,)).fetchall()
+        return [{"run_id": r[0], "status": r[1], "started_at": r[2]} for r in rows]
+
+    def mark_run_failed(self, run_id, note: str) -> None:
+        """Close out an abandoned run, preserving any existing note."""
+        self.conn.execute(
+            """UPDATE runs
+                  SET status='failed',
+                      finished_at=COALESCE(finished_at, now()),
+                      notes=COALESCE(notes || ' | ', '') || %s
+                WHERE run_id=%s""", (note, run_id))
+        self.conn.execute(
+            """UPDATE stage_runs
+                  SET status='failed',
+                      finished_at=COALESCE(finished_at, now()),
+                      error=COALESCE(error, %s)
+                WHERE run_id=%s AND status='running'""", (note, run_id))
+
     def completed_stages(self, run_id) -> set[str]:
         rows = self.conn.execute(
             "SELECT stage_name FROM stage_runs WHERE run_id=%s AND status='completed'",

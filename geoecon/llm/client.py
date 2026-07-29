@@ -15,6 +15,7 @@ trace. The untouched `content` is still kept in `raw`/`text` so nothing is disca
 """
 from __future__ import annotations
 
+import logging
 import os
 import random
 import re
@@ -25,6 +26,8 @@ from pathlib import Path
 from typing import Any
 
 import requests
+
+log = logging.getLogger("geoecon.llm")
 
 # inline reasoning markers some models emit inside `content`
 _THINK_RE = re.compile(r"<(think|thinking|reasoning|thought)>.*?</\1>", re.S | re.I)
@@ -117,23 +120,37 @@ class LLMClient:
         url = f"{self.base_url}/chat/completions"
         headers = {"Authorization": f"Bearer {self._api_key}", "Content-Type": "application/json"}
         last_err = "unknown"
-        for attempt in range(self.max_retries + 1):
+        attempts = self.max_retries + 1
+        for attempt in range(attempts):
             ts = datetime.now(timezone.utc).isoformat()
             t0 = time.perf_counter()
             try:
                 r = self.session.post(url, headers=headers, json=body, timeout=self.timeout_s)
             except requests.RequestException as e:
+                latency_ms = int((time.perf_counter() - t0) * 1000)
                 last_err = f"network: {e}"
+                log.warning("llm %s attempt %d/%d failed after %dms: %s",
+                            model, attempt + 1, attempts, latency_ms, last_err)
             else:
                 latency_ms = int((time.perf_counter() - t0) * 1000)
                 if r.status_code == 200:
                     return self._parse(model, r.json(), latency_ms, ts)
                 last_err = f"http {r.status_code}: {r.text[:300]}"
                 if r.status_code not in self.RETRYABLE:
+                    # Terminal: no retry will help (e.g. 400 "no healthy
+                    # deployments", 401, 404). Say so loudly and return.
+                    log.error("llm %s non-retryable after %dms: %s",
+                              model, latency_ms, last_err)
                     return LLMResponse(model, "", latency_ms, ts, error=last_err,
                                        raw={"status": r.status_code, "body": r.text[:2000]})
+                log.warning("llm %s attempt %d/%d failed after %dms: %s",
+                            model, attempt + 1, attempts, latency_ms, last_err)
             if attempt < self.max_retries:
                 time.sleep(min(2 ** attempt + random.random(), 30))
+        # All attempts exhausted. This is the path that stayed silent for 6h50m
+        # on 2026-07-28 while every deepseek call burned 5 attempts.
+        log.error("llm %s EXHAUSTED all %d attempts, giving up: %s",
+                  model, attempts, last_err)
         return LLMResponse(model, "", 0, datetime.now(timezone.utc).isoformat(), error=last_err)
 
     @staticmethod

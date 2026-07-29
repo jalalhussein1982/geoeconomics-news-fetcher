@@ -141,10 +141,32 @@ noticed**, each left frozen in `status='running'` forever:
 
 **Five of the eight died in `extraction`**, on 07-09, 07-10, 07-16, 07-23 and then twice on
 07-28/29 (runs 69 and 70). That is a recurring fault on a roughly weekly cadence, and it has
-been accelerating. Every previous occurrence was silently absorbed by a retry that happened
-to land better — run 62's pod (`geoecon-daily-29747460-tlj7g`) shows `RESTARTS 1`, and run 63
-started 4m35s later and completed. Last night was not a new failure; it was the first time the
+been accelerating.
+
+**No brief was ever actually missed, though — every one of those days was rescued by a
+retry:**
+
+| abandoned run | Prague day | other runs that day | briefs sent that day |
+|---|---|---|---|
+| 23 | 06-27 | 24 completed | 3 |
+| 33, 34 | 07-04 | 35, 36 completed | 6 |
+| 42, 43 | 07-09 | 44, 45 completed | 3 |
+| 47 | 07-11 | 48 completed | 3 |
+| 54 | 07-17 | 55 completed | 3 |
+| 62 | 07-24 | 63 completed | 3 |
+
+Run 62's pod (`geoecon-daily-29747460-tlj7g`) shows `RESTARTS 1`, and run 63 started 4m35s
+later and completed. So the correct reading is **not** "eight lost briefs" — it is that the
+system has been running on retry luck for five weeks, and 2026-07-29 was the first night the
 retry budget ran out before the fault did.
+
+⚠️ **Do not infer the cause from an orphaned row.** A `running` row proves only that the
+process ended without unwinding. *Both* SIGKILL **and** SIGTERM leave one — the SIGTERM
+handler raises `SystemExit(143)`, a `BaseException` that bypasses `run_pipeline`'s
+`except Exception`, so `fail_stage` never runs there either. Run 43 is the worked example:
+`cronjob.yaml` records it as "killed at 93% of synthesis by the old 4h deadline", i.e. a
+SIGTERM deadline kill, not an OOM. The first version of the reconciliation alert called all
+eight "uncatchable SIGKILL" and had to be corrected — see §6.1.
 
 So this incident is not "a bad node one night". It is a **known-frequency defect that was
 invisible by construction** — which is exactly why §5.1 (retain the evidence) and §6.1 (notice
@@ -224,6 +246,16 @@ a legitimately-running pipeline is never touched) and sends one alert listing th
 exact `kubectl` command to read the retained pod's termination reason. Best-effort by
 contract: it can never block a run. *This is the fix for the class of failure that had zero
 signal.* (`repo.stale_running_runs`, `repo.mark_run_failed`)
+
+> **Corrected after first live use (2026-07-29 03:41Z).** The first version of this alert
+> asserted the runs died of "an uncatchable SIGKILL (OOM / node-pressure eviction / node
+> loss)" and that each "produced nothing and told no one". Both claims were wrong, and wrong
+> in exactly the way §3 criticises the old SIGTERM alert for: it diagnosed a cause it cannot
+> observe. An orphaned row does not distinguish SIGKILL from a SIGTERM deadline kill (run 43
+> was the latter), and it does not imply a missed delivery (all eight days were delivered).
+> The alert now states only what is known, names *both* candidate causes and why neither is
+> recorded, and tells the reader how to check delivery and the retained pod. Regression test:
+> `test_reconcile_alert_does_not_assert_a_single_cause`.
 
 **6.2 ⟳ — LLM client is now observable.** `geoecon/llm/client.py` now has a module logger and
 logs every failure path: a `WARNING` per retryable attempt (model, attempt n/max, status,

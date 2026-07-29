@@ -76,22 +76,33 @@ def reconcile_abandoned_runs(cfg, repo, *, now=None, max_age_hours=6) -> int:
         if not stale:
             return 0
         note = (f"abandoned: still 'running' with no progress since before {cutoff:%Y-%m-%d %H:%M}Z; "
-                f"process died without unwinding (uncatchable SIGKILL — OOM / node-pressure "
-                f"eviction / node loss). Closed out by reconciliation at {now:%Y-%m-%d %H:%M}Z.")
+                f"process ended without unwinding (cause not recorded). "
+                f"Closed out by reconciliation at {now:%Y-%m-%d %H:%M}Z.")
         for r in stale:
             repo.mark_run_failed(r["run_id"], note)
         listing = "\n".join(f"  run {r['run_id']}  started {r['started_at']}" for r in stale)
         log.error("reconciled %d abandoned run(s):\n%s", len(stale), listing)
         alerts.send_alert(
             cfg, f"{len(stale)} abandoned run(s) found and closed out",
-            f"These runs were left in 'running' by a process that died without "
-            f"unwinding — an uncatchable SIGKILL (OOM / node-pressure eviction / "
-            f"node loss), which runs no handler and therefore sends no alert of "
-            f"its own:\n\n{listing}\n\n"
-            f"They have been marked 'failed'. Each one is a pipeline run that "
-            f"produced nothing and told no one at the time.\n\n"
-            f"Check the pod's termination reason (the job template uses "
-            f"restartPolicy: Never so failed pods are retained):\n"
+            f"These runs were left in 'running' by a process that ended without "
+            f"unwinding, so nothing recorded why:\n\n{listing}\n\n"
+            f"They have been marked 'failed'.\n\n"
+            f"WHAT THIS DOES AND DOES NOT TELL YOU\n"
+            f"An orphaned 'running' row does not identify a cause. Both of these "
+            f"leave one, and only the first sends an alert of its own:\n"
+            f"  - SIGTERM (deadline kill, node drain, job giving up) — the handler "
+            f"raises SystemExit(143), a BaseException that bypasses the per-stage "
+            f"`except Exception`, so fail_stage never runs either.\n"
+            f"  - SIGKILL (OOM, node-pressure eviction, node loss) — uncatchable, "
+            f"runs no handler at all and is completely silent.\n\n"
+            f"It also does NOT mean a brief was missed: a later attempt or the next "
+            f"day's run may have delivered normally. Check before worrying:\n"
+            f"  SELECT r.run_id, r.status, n.bucket, n.send_status FROM runs r\n"
+            f"    LEFT JOIN newsletters n ON n.run_id = r.run_id\n"
+            f"   WHERE (r.started_at AT TIME ZONE 'Europe/Prague')::date = 'YYYY-MM-DD';\n\n"
+            f"For anything recent, the pod holds the real answer — the job template "
+            f"uses restartPolicy: Never, so failed pods are retained (older runs' "
+            f"pods will already have been garbage-collected):\n"
             f"  kubectl -n hussein-ns get pods -l app=geoecon\n"
             f"  kubectl -n hussein-ns get pods -l app=geoecon -o jsonpath="
             f"'{{range .items[*]}}{{.metadata.name}}{{\" \"}}"

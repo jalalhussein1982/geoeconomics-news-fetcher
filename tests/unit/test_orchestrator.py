@@ -165,8 +165,34 @@ def test_reconcile_marks_abandoned_runs_and_alerts(monkeypatch):
     assert n == 1
     assert repo.failed and repo.failed[0][0] == 69
     assert "69" in sent["body"]
-    assert "SIGKILL" in sent["body"] or "disappear" in sent["body"].lower()
     assert repo.cutoff == datetime(2026, 7, 29, 0, 0, tzinfo=timezone.utc)
+
+
+def test_reconcile_alert_does_not_assert_a_single_cause(monkeypatch):
+    """An orphaned 'running' row does NOT prove SIGKILL. A SIGTERM deadline kill
+    leaves one too: the handler raises SystemExit(143), a BaseException, which
+    bypasses run_pipeline's `except Exception`, so fail_stage never runs. Run 43
+    (2026-07-09) was exactly that — killed at 93% of synthesis by the old 4h
+    deadline — yet the first version of this alert called all 8 runs SIGKILL.
+    Nor does an abandoned run imply a missed brief: all 8 of those days were
+    still delivered by a retry. State what is known; do not diagnose."""
+    sent = {}
+    monkeypatch.setattr(alerts, "send_alert",
+                        lambda cfg, subject, body, **kw: sent.update(body=body) or True)
+    repo = _ReconcileRepo(stale=[{"run_id": 43, "status": "running",
+                                  "started_at": datetime(2026, 7, 9, 5, 4, tzinfo=timezone.utc)}])
+    orchestrator.reconcile_abandoned_runs(_cfg(), repo,
+                                          now=datetime(2026, 7, 29, tzinfo=timezone.utc))
+
+    body = sent["body"]
+    low = body.lower()
+    # must not present one cause as fact...
+    assert "uncatchable sigkill (" not in low
+    # ...but must still name the candidates, including the SIGTERM/deadline case
+    assert "sigterm" in low and "sigkill" in low
+    # must not claim delivery was lost — a retry may well have covered the day
+    assert "produced nothing and told no one" not in low
+    assert "newsletters" in low or "brief" in low or "delivered" in low
 
 
 def test_reconcile_is_quiet_and_sends_nothing_when_clean(monkeypatch):

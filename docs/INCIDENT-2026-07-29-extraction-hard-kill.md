@@ -235,9 +235,29 @@ deepseek revert would now fail fast rather than hang like run 67.
 ⚠️ These are committed to the working tree with tests (229 unit tests pass), but the cluster
 still runs `20260709-1`, which does **not** contain them. Tonight's protection comes entirely
 from §5. Docker Desktop was not running this session, so the image could not be built.
-To ship: `docker build -t jalalhussein/geoecon-pipeline:<tag> . && docker push …`, then bump
-the tag in **both** `deploy/cronjob.yaml` and `deploy/watchdog-cronjob.yaml` (they must stay
-in lockstep — the alert hooks live in this image).
+To ship:
+
+```
+docker build --platform linux/amd64 -t jalalhussein/geoecon-pipeline:<tag> . && docker push …
+```
+
+then bump the tag in **both** `deploy/cronjob.yaml` and `deploy/watchdog-cronjob.yaml` (they
+must stay in lockstep — the alert hooks live in this image).
+
+> ⚠️ **`--platform linux/amd64` is mandatory and was missing from this line until 2026-07-30.**
+> The dev machine is Apple Silicon (arm64), the CERIT-SC nodes are amd64. A plain `docker build`
+> yields an arm64-only manifest that pushes to Docker Hub without complaint and then fails at
+> pull time with `no match for platform in manifest`. Because both CronJobs are deliberately
+> kept on the same tag, that breaks the pipeline **and** the watchdog at once — no brief and no
+> alert, a completely silent total failure. Following this line as originally written reproduced
+> exactly that on 2026-07-30; it was caught only by a throwaway pull-check Job before 01:00.
+> Verify after every push:
+> ```
+> docker manifest inspect jalalhussein/geoecon-pipeline:<tag> | grep architecture
+> ```
+> and prove the pull in-cluster rather than waiting for 01:00 to find out. A local `docker run`
+> smoke test cannot catch this — on an arm64 host it passes precisely because it runs the wrong
+> architecture.
 
 **6.1 — Detect the silent kill.** `orchestrator.reconcile_abandoned_runs()`, called at
 startup. A SIGKILLed process runs no handler, so it cannot report its own death — the *next*

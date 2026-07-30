@@ -51,7 +51,7 @@ spec:
               # keep in lockstep with watchdog-cronjob.yaml — both need the same
               # alert-code image (the in-process alert hooks live here; tag skew
               # would silently ship a watchdog-only alert layer).
-              image: jalalhussein/geoecon-pipeline:20260729-2
+              image: jalalhussein/geoecon-pipeline:20260730-1
               args: ["run"]
               securityContext:
                 allowPrivilegeEscalation: false
@@ -127,6 +127,16 @@ spec:
                   value: "gemma4"
                 - name: DEDUP_MODEL
                   value: "gemma4"
+                # Circuit breaker: fail the run after N consecutive fully-exhausted
+                # complete() calls instead of grinding to the deadline (run 67 burned
+                # 6h50m that way). 5 is the in-code default; stated here so the kill
+                # switch is discoverable. Set to "0" to disable WITHOUT an image
+                # rebuild — the escape hatch that did not exist on 07-28/29.
+                # Do not raise GATE_WORKERS/SYNTH_WORKERS above 4: the gateway caps
+                # max_parallel_requests at 4 per key, and 429s that exhaust their
+                # retries would feed this breaker.
+                - name: LLM_SYSTEMIC_THRESHOLD
+                  value: "5"
               resources:
                 # 4Gi limit: 2026-07-09 attempt 1 (run 42) died with an
                 # uncatchable SIGKILL during extraction — no error row, no crash

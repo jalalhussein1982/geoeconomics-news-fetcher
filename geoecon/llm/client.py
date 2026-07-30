@@ -19,6 +19,7 @@ import logging
 import os
 import random
 import re
+import threading
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -88,17 +89,84 @@ class LLMResponse:
         return self.error is None
 
 
+class SystemicLLMFailure(RuntimeError):
+    """The backend is systemically unavailable, not merely flaky.
+
+    Raised once `SYSTEMIC_FAILURE_THRESHOLD` consecutive `complete()` calls have
+    each exhausted their full retry ladder. On 2026-07-28 that condition held for
+    6h50m — ~12,300 doomed requests — while the gate stage kept submitting
+    batches, so the run neither failed nor produced a brief. Nothing catches this
+    on the LLM path (the only handlers there are for JSONDecodeError), so it
+    propagates through fut.result() to run_pipeline's `except Exception`, which
+    records the stage failure and sends a crash alert naming the real cause.
+    """
+
+
 class LLMClient:
     RETRYABLE = {408, 409, 425, 429, 500, 502, 503, 504}
+    SYSTEMIC_FAILURE_THRESHOLD = 5
 
     def __init__(self, base_url, api_key, *, timeout_s=240, max_retries=4,
-                 default_params=None, session=None):
+                 default_params=None, session=None, systemic_threshold=None):
         self.base_url = base_url.rstrip("/")
         self._api_key = api_key
         self.timeout_s = timeout_s
         self.max_retries = max_retries
         self.default_params = default_params or {}
         self.session = session or requests.Session()
+        # 0 (or negative) disables the breaker entirely — an operational kill
+        # switch settable from the CronJob env, so a misfiring breaker never needs
+        # an image rebuild to defuse. `None` means "use the default".
+        self.systemic_threshold = (self.SYSTEMIC_FAILURE_THRESHOLD
+                                   if systemic_threshold is None else systemic_threshold)
+        # Shared across GATE_WORKERS/SYNTH_WORKERS threads, so every read and
+        # write of the counter is lock-guarded.
+        self._lock = threading.Lock()
+        self._consecutive_exhausted = 0
+
+    @property
+    def consecutive_exhausted(self) -> int:
+        with self._lock:
+            return self._consecutive_exhausted
+
+    # `api_key: <token>`, `api-key=<token>` etc., whatever the gateway echoes.
+    _KEY_ECHO_RE = re.compile(r"(api[_-]?key\S*\s*[:=]\s*)\S+", re.I)
+
+    def _redact(self, text: str) -> str:
+        """Strip credentials out of anything we are about to log or persist.
+
+        LiteLLM's 429 body quotes the caller's key ("Rate limit exceeded for
+        api_key: <token>"), and the 2026-07-29 observability fix started logging
+        error bodies verbatim — 24 such lines on run 73 alone. Verified against the
+        live secret on 2026-07-30: the echoed token is **sha256(api_key)**, not the
+        key, so this is account-identifying material rather than a usable
+        credential. It is scrubbed regardless, and note the consequence: matching
+        `self._api_key` literally would never catch the hashed form, so the
+        `api_key: <token>` pattern is what actually does the work here. The literal
+        match remains as defence in case the gateway ever echoes raw keys.
+
+        Redact before truncating, so a token straddling the cut cannot survive in part.
+        """
+        if not text:
+            return text
+        if self._api_key:
+            text = text.replace(self._api_key, "***REDACTED***")
+        return self._KEY_ECHO_RE.sub(r"\1***REDACTED***", text)
+
+    def _note_success(self) -> None:
+        with self._lock:
+            self._consecutive_exhausted = 0
+
+    def _note_exhausted(self) -> int:
+        with self._lock:
+            self._consecutive_exhausted += 1
+            return self._consecutive_exhausted
+
+    def _breaker_is_open(self) -> bool:
+        if self.systemic_threshold <= 0:
+            return False
+        with self._lock:
+            return self._consecutive_exhausted >= self.systemic_threshold
 
     @classmethod
     def from_config(cls, cfg, *, env_from=None):
@@ -116,6 +184,14 @@ class LLMClient:
     def complete(self, model, messages, **params) -> LLMResponse:
         """Single chat completion. `model` is the only field that changes per model.
         default_params (temperature=0, seed, max_tokens) merge first; explicit params win."""
+        # Circuit already open: reject immediately rather than burn another full
+        # retry ladder. With ~100 gate batches queued behind 4 workers, letting
+        # each one retry on the way down would stretch the "fast failure" this
+        # breaker exists to produce back out into hours.
+        if self._breaker_is_open():
+            raise SystemicLLMFailure(
+                f"{model}: circuit open after {self.systemic_threshold} consecutive "
+                f"exhausted calls — refusing to send further requests")
         body = {**self.default_params, **params, "model": model, "messages": messages}
         url = f"{self.base_url}/chat/completions"
         headers = {"Authorization": f"Bearer {self._api_key}", "Content-Type": "application/json"}
@@ -128,21 +204,26 @@ class LLMClient:
                 r = self.session.post(url, headers=headers, json=body, timeout=self.timeout_s)
             except requests.RequestException as e:
                 latency_ms = int((time.perf_counter() - t0) * 1000)
-                last_err = f"network: {e}"
+                last_err = f"network: {self._redact(str(e))}"
                 log.warning("llm %s attempt %d/%d failed after %dms: %s",
                             model, attempt + 1, attempts, latency_ms, last_err)
             else:
                 latency_ms = int((time.perf_counter() - t0) * 1000)
                 if r.status_code == 200:
+                    self._note_success()
                     return self._parse(model, r.json(), latency_ms, ts)
-                last_err = f"http {r.status_code}: {r.text[:300]}"
+                last_err = f"http {r.status_code}: {self._redact(r.text)[:300]}"
                 if r.status_code not in self.RETRYABLE:
                     # Terminal: no retry will help (e.g. 400 "no healthy
-                    # deployments", 401, 404). Say so loudly and return.
+                    # deployments", 401, 404). Say so loudly and return. This does
+                    # NOT feed the breaker: it already fails fast, so it cannot
+                    # cause the grind the breaker exists to stop, and counting it
+                    # would turn one malformed prompt into a failed run.
                     log.error("llm %s non-retryable after %dms: %s",
                               model, latency_ms, last_err)
                     return LLMResponse(model, "", latency_ms, ts, error=last_err,
-                                       raw={"status": r.status_code, "body": r.text[:2000]})
+                                       raw={"status": r.status_code,
+                                            "body": self._redact(r.text)[:2000]})
                 log.warning("llm %s attempt %d/%d failed after %dms: %s",
                             model, attempt + 1, attempts, latency_ms, last_err)
             if attempt < self.max_retries:
@@ -151,6 +232,14 @@ class LLMClient:
         # on 2026-07-28 while every deepseek call burned 5 attempts.
         log.error("llm %s EXHAUSTED all %d attempts, giving up: %s",
                   model, attempts, last_err)
+        n = self._note_exhausted()
+        if 0 < self.systemic_threshold <= n:
+            log.error("llm %s SYSTEMIC FAILURE: %d consecutive exhausted calls, "
+                      "failing the run", model, n)
+            raise SystemicLLMFailure(
+                f"{model}: {n} consecutive complete() calls exhausted all {attempts} "
+                f"attempts — the backend appears systemically unavailable, not flaky. "
+                f"Last error: {last_err}")
         return LLMResponse(model, "", 0, datetime.now(timezone.utc).isoformat(), error=last_err)
 
     @staticmethod

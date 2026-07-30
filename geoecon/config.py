@@ -68,6 +68,10 @@ class Config:
     # Set to 1 to restore byte-identical sequential behavior without a rebuild.
     gate_workers: int = 4             # GATE_WORKERS; concurrent gate batches
     synth_workers: int = 4            # SYNTH_WORKERS; concurrent cluster syntheses
+    # Consecutive fully-exhausted LLM calls before the run is failed as a systemic
+    # outage rather than ground on until the deadline (run 67 burned 6h50m that
+    # way). Set to 0 to disable the breaker without a rebuild.
+    llm_systemic_threshold: int = 5    # LLM_SYSTEMIC_THRESHOLD
     gate_max_tokens: int = 8192       # GATE_MAX_TOKENS
     dedup_max_tokens: int = 8192      # DEDUP_MAX_TOKENS (per-country event grouping)
     synth_max_tokens: int = 16384     # SYNTH_MAX_TOKENS (per-cluster record)
@@ -125,6 +129,7 @@ class Config:
             synth_total_chars=int(env.get("SYNTH_TOTAL_CHARS", "30000")),
             gate_workers=int(env.get("GATE_WORKERS", "4")),
             synth_workers=int(env.get("SYNTH_WORKERS", "4")),
+            llm_systemic_threshold=int(env.get("LLM_SYSTEMIC_THRESHOLD", "5")),
             gate_max_tokens=int(env.get("GATE_MAX_TOKENS", "8192")),
             dedup_max_tokens=int(env.get("DEDUP_MAX_TOKENS", "8192")),
             synth_max_tokens=int(env.get("SYNTH_MAX_TOKENS", "16384")),

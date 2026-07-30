@@ -1,10 +1,16 @@
 from __future__ import annotations
 import argparse, logging, os, signal, sys, time, traceback
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 from .config import Config
 from . import alerts
 
 log = logging.getLogger("geoecon.orchestrator")
+
+# The schedule, the delivery target and the operator all live in Prague. UTC-only
+# timestamps in alerts put a 23:00Z run on the previous calendar day, which is
+# what made 2026-07-30's cleanup mail look like it concerned an unrelated night.
+PRAGUE = ZoneInfo("Europe/Prague")
 
 # What the pipeline is doing right now — read by the SIGTERM handler so a
 # deadline-kill alert can name the hung stage.
@@ -80,13 +86,29 @@ def reconcile_abandoned_runs(cfg, repo, *, now=None, max_age_hours=6) -> int:
                 f"Closed out by reconciliation at {now:%Y-%m-%d %H:%M}Z.")
         for r in stale:
             repo.mark_run_failed(r["run_id"], note)
-        listing = "\n".join(f"  run {r['run_id']}  started {r['started_at']}" for r in stale)
+        listing = "\n".join(
+            f"  run {r['run_id']}  started "
+            f"{r['started_at'].astimezone(PRAGUE):%Y-%m-%d %H:%M:%S} Prague  "
+            f"({r['started_at'].astimezone(timezone.utc):%Y-%m-%d %H:%M:%S}Z)"
+            for r in stale)
         log.error("reconciled %d abandoned run(s):\n%s", len(stale), listing)
+        days = sorted({r["started_at"].astimezone(PRAGUE).date().isoformat() for r in stale})
+        span = days[0] if len(days) == 1 else f"{days[0]}..{days[-1]}"
         alerts.send_alert(
-            cfg, f"{len(stale)} abandoned run(s) found and closed out",
-            f"These runs were left in 'running' by a process that ended without "
-            f"unwinding, so nothing recorded why:\n\n{listing}\n\n"
+            cfg, f"{len(stale)} abandoned run(s) from {span} closed out "
+                 f"— retrospective, no action needed",
+            f"This is housekeeping, NOT a new failure. Every run below died before "
+            f"the current process even started; they appear here only because "
+            f"nothing recorded their death at the time, and they have now been "
+            f"closed out. Dates are Prague, matching the 01:00 schedule.\n\n"
+            f"{listing}\n\n"
             f"They have been marked 'failed'.\n\n"
+            f"WHY YOU ARE HEARING ABOUT THIS ONLY NOW\n"
+            f"Reconciliation only touches runs older than {max_age_hours}h, so it can "
+            f"never mistake a pipeline that is still legitimately running for a dead "
+            f"one. A run killed shortly after 01:00 therefore is not reported until "
+            f"the NEXT night's run — roughly 24h later. A same-night kill is instead "
+            f"surfaced by the retained pod and by the 07:30 watchdog.\n\n"
             f"WHAT THIS DOES AND DOES NOT TELL YOU\n"
             f"An orphaned 'running' row does not identify a cause. Both of these "
             f"leave one, and only the first sends an alert of its own:\n"
@@ -106,7 +128,8 @@ def reconcile_abandoned_runs(cfg, repo, *, now=None, max_age_hours=6) -> int:
             f"  kubectl -n hussein-ns get pods -l app=geoecon\n"
             f"  kubectl -n hussein-ns get pods -l app=geoecon -o jsonpath="
             f"'{{range .items[*]}}{{.metadata.name}}{{\" \"}}"
-            f"{{.status.containerStatuses[*].state.terminated.reason}}{{\"\\n\"}}{{end}}'\n")
+            f"{{.status.containerStatuses[*].state.terminated.reason}}{{\"\\n\"}}{{end}}'\n",
+            prefix=alerts.CLEANUP_PREFIX)
         return len(stale)
     except Exception:
         log.exception("reconciliation failed (continuing — this must never block a run)")
@@ -191,7 +214,8 @@ def _bootstrap(env):
     from .state.repo import Repo
     from .llm.client import LLMClient
     conn = db.connect(cfg.db_dsn); db.apply_migrations(conn)
-    return cfg, Repo(conn), LLMClient(cfg.llm_base_url, cfg.llm_api_key)
+    return cfg, Repo(conn), LLMClient(cfg.llm_base_url, cfg.llm_api_key,
+                                      systemic_threshold=cfg.llm_systemic_threshold)
 
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(prog="geoecon")

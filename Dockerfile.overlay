@@ -1,0 +1,22 @@
+# Code-only rebuild: replaces the geoecon package (and config) on top of an
+# already-shipped image, leaving the base OS and every dependency untouched.
+#
+# BUILD WITH:
+#   docker build --platform linux/amd64 -f Dockerfile.overlay \
+#     --build-arg BASE_TAG=<tag in production> -t jalalhussein/geoecon-pipeline:<new tag> .
+#
+# Why this exists: pyproject.toml pins nothing (`trafilatura>=1.8`, ...), so the
+# main Dockerfile resolves whatever is current on the day of the build. Months
+# after the last image that means a new Debian/glibc, lxml, trafilatura and
+# psycopg riding along with an unrelated code fix — and the extraction stage has
+# an unexplained native crash (exit 139) whose behaviour must stay attributable.
+# Use the main Dockerfile when a dependency refresh is the point of the build.
+ARG BASE_TAG
+FROM jalalhussein/geoecon-pipeline:${BASE_TAG}
+USER root
+RUN rm -rf /app/geoecon /app/config
+COPY pyproject.toml ./
+COPY geoecon ./geoecon
+COPY config ./config
+RUN pip install --no-cache-dir --no-deps --force-reinstall .
+USER 1000

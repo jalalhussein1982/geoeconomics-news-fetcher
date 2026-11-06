@@ -36,7 +36,7 @@ spec:
             seccompProfile: { type: RuntimeDefault }
           containers:
             - name: watchdog
-              image: jalalhussein/geoecon-pipeline:20260730-1
+              image: jalalhussein/geoecon-pipeline:20261106-1
               args: ["watchdog"]
               securityContext:
                 allowPrivilegeEscalation: false

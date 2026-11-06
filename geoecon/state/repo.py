@@ -19,12 +19,29 @@ class Repo:
             (window_start, window_end, scheduled_for, synthesis_model,
              synthesis_prompt_id, embedding_model)).fetchone()[0]
 
-    def find_resumable_run(self, window_start, window_end) -> int | None:
+    def find_unsent_run(self, since) -> dict | None:
+        """Newest run since `since` whose briefs were built but not all delivered.
+
+        This is what a retry adopts so it re-sends the missing email(s) instead of
+        rebuilding everything. Deliberately narrow:
+          - status 'failed' only — a 'running' row may be a live process mid-send;
+          - `render` completed — otherwise there is nothing to send;
+          - `send` not completed — a dry run completes `send` with briefs still
+            pending on purpose;
+          - at least one brief not 'sent'.
+        Returns {run_id, scheduled_for} or None.
+        """
         row = self.conn.execute(
-            """SELECT run_id FROM runs
-               WHERE window_start=%s AND window_end=%s AND status IN ('running','failed','partial')
-               ORDER BY run_id DESC LIMIT 1""", (window_start, window_end)).fetchone()
-        return row[0] if row else None
+            """SELECT r.run_id, r.scheduled_for FROM runs r
+                WHERE r.status = 'failed' AND r.scheduled_for >= %s
+                  AND EXISTS (SELECT 1 FROM stage_runs s WHERE s.run_id = r.run_id
+                               AND s.stage_name = 'render' AND s.status = 'completed')
+                  AND NOT EXISTS (SELECT 1 FROM stage_runs s WHERE s.run_id = r.run_id
+                                   AND s.stage_name = 'send' AND s.status = 'completed')
+                  AND EXISTS (SELECT 1 FROM newsletters n WHERE n.run_id = r.run_id
+                               AND n.send_status <> 'sent')
+                ORDER BY r.run_id DESC LIMIT 1""", (since,)).fetchone()
+        return {"run_id": row[0], "scheduled_for": row[1]} if row else None
 
     def stale_running_runs(self, cutoff) -> list[dict]:
         """Runs still marked 'running' that started before `cutoff`.
@@ -305,10 +322,10 @@ class Repo:
 
     def newsletters_for_run(self, run_id) -> list[dict]:
         rows = self.conn.execute(
-            "SELECT newsletter_id, bucket, record_count, email_html, send_status "
+            "SELECT newsletter_id, bucket, record_count, email_html, send_status, send_error "
             "FROM newsletters WHERE run_id=%s ORDER BY bucket", (run_id,)).fetchall()
         return [{"newsletter_id": r[0], "bucket": r[1], "record_count": r[2],
-                 "email_html": r[3], "send_status": r[4]} for r in rows]
+                 "email_html": r[3], "send_status": r[4], "send_error": r[5]} for r in rows]
 
     def update_newsletter_send(self, newsletter_id, send_status, send_error=None):
         self.conn.execute(
@@ -349,14 +366,19 @@ class Repo:
                 "model": row[3], "record_count": row[4]}
 
     # ---- watchdog (read-only) ----
-    def latest_run_for_window(self, start, end) -> dict | None:
-        row = self.conn.execute(
+    def runs_for_window(self, start, end) -> list[dict]:
+        """Every run scheduled in [start, end), oldest first.
+
+        All of them, not just the newest: one night's Job makes up to three
+        attempts, and the newest row is often a dead retry that says nothing
+        about what an earlier attempt delivered.
+        """
+        rows = self.conn.execute(
             """SELECT run_id, status, started_at, finished_at FROM runs
                WHERE scheduled_for >= %s AND scheduled_for < %s
-               ORDER BY run_id DESC LIMIT 1""", (start, end)).fetchone()
-        if not row:
-            return None
-        return {"run_id": row[0], "status": row[1], "started_at": row[2], "finished_at": row[3]}
+               ORDER BY run_id""", (start, end)).fetchall()
+        return [{"run_id": r[0], "status": r[1], "started_at": r[2], "finished_at": r[3]}
+                for r in rows]
 
     def failed_stages(self, run_id) -> list[dict]:
         rows = self.conn.execute(

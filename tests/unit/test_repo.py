@@ -26,7 +26,6 @@ def _win():
 def test_run_and_stage_lifecycle(repo):
     ws, we, sf = _win()
     rid = repo.create_run(ws, we, sf, "deepseek-v3.2", "task_a_cov")
-    assert repo.find_resumable_run(ws, we) == rid
     repo.start_stage(rid, "discovery"); repo.complete_stage(rid, "discovery", {"n": 3})
     assert "discovery" in repo.completed_stages(rid)
 
@@ -352,24 +351,87 @@ def test_discovery_search_is_allowed_stage_name(repo):
 
 
 @requires_db
-def test_latest_run_for_window_and_failed_stages(repo):
+def test_runs_for_window_and_failed_stages(repo):
     ws, we, sf = _win()
-    assert repo.latest_run_for_window(sf - timedelta(hours=12), sf + timedelta(hours=12)) is None
+    assert repo.runs_for_window(sf - timedelta(hours=12), sf + timedelta(hours=12)) == []
     rid = repo.create_run(ws, we, sf, "deepseek", "task_a_cov")
     repo.start_stage(rid, "gate"); repo.fail_stage(rid, "gate", ValueError("gate exploded"))
     repo.set_run_status(rid, "failed")
-    run = repo.latest_run_for_window(sf - timedelta(hours=12), sf + timedelta(hours=12))
+    (run,) = repo.runs_for_window(sf - timedelta(hours=12), sf + timedelta(hours=12))
     assert run["run_id"] == rid and run["status"] == "failed"
     assert run["started_at"] is not None
     fails = repo.failed_stages(rid)
     assert fails == [{"stage_name": "gate", "error": "gate exploded"}]
-    # outside the window -> None
-    assert repo.latest_run_for_window(sf + timedelta(days=2), sf + timedelta(days=3)) is None
+    # outside the window -> nothing
+    assert repo.runs_for_window(sf + timedelta(days=2), sf + timedelta(days=3)) == []
 
 @requires_db
-def test_latest_run_for_window_returns_newest(repo):
+def test_runs_for_window_returns_every_run_oldest_first(repo):
     ws, we, sf = _win()
-    repo.create_run(ws, we, sf, "deepseek", "task_a_cov")
+    rid1 = repo.create_run(ws, we, sf, "deepseek", "task_a_cov")
     rid2 = repo.create_run(ws, we, sf, "deepseek", "task_a_cov")
-    run = repo.latest_run_for_window(sf - timedelta(hours=1), sf + timedelta(hours=1))
-    assert run["run_id"] == rid2
+    runs = repo.runs_for_window(sf - timedelta(hours=1), sf + timedelta(hours=1))
+    assert [r["run_id"] for r in runs] == [rid1, rid2]
+
+# ---- find_unsent_run: which earlier run may a retry adopt to re-send its briefs ----
+
+def _built_run(repo, sf, briefs, *, status="failed", render_done=True, send_stage="failed"):
+    ws, we, _ = _win()
+    rid = repo.create_run(ws, we, sf, "deepseek", "task_a_cov")
+    repo.start_stage(rid, "render")
+    if render_done:
+        repo.complete_stage(rid, "render", {})
+    for bucket, st in briefs.items():
+        nid = repo.insert_newsletter(rid, "en_only", f"/a/{bucket}.html", "<b>x</b>", 3, bucket=bucket)
+        if st != "pending":
+            repo.update_newsletter_send(nid, st, send_error="timed out" if st == "failed" else None)
+    if send_stage == "failed":
+        repo.start_stage(rid, "send"); repo.fail_stage(rid, "send", RuntimeError("some regions failed"))
+    elif send_stage == "completed":
+        repo.start_stage(rid, "send"); repo.complete_stage(rid, "send", {})
+    repo.set_run_status(rid, status)
+    return rid
+
+
+@requires_db
+def test_find_unsent_run_returns_the_run_whose_send_partly_failed(repo):
+    _, _, sf = _win()
+    since = sf - timedelta(hours=12)
+    assert repo.find_unsent_run(since) is None
+    rid = _built_run(repo, sf, {"latam": "failed", "middle_east": "sent", "north_africa": "sent"})
+    found = repo.find_unsent_run(since)
+    assert found == {"run_id": rid, "scheduled_for": sf}
+    # once the missing brief is delivered there is nothing left to resume
+    for n in repo.newsletters_for_run(rid):
+        repo.update_newsletter_send(n["newsletter_id"], "sent")
+    assert repo.find_unsent_run(since) is None
+
+
+@requires_db
+def test_find_unsent_run_returns_the_newest_candidate(repo):
+    _, _, sf = _win()
+    _built_run(repo, sf, {"latam": "failed"})
+    rid2 = _built_run(repo, sf, {"latam": "failed"})
+    assert repo.find_unsent_run(sf - timedelta(hours=12))["run_id"] == rid2
+
+
+@requires_db
+def test_find_unsent_run_ignores_runs_that_must_not_be_adopted(repo):
+    _, _, sf = _win()
+    # crashed before the briefs were built (the extraction segfault) -> nothing to send
+    _built_run(repo, sf, {}, render_done=False, send_stage=None)
+    # still 'running': may be a live process mid-send, never steal it
+    _built_run(repo, sf, {"latam": "pending"}, status="running", send_stage=None)
+    # dry run: send stage completed on purpose with briefs left pending
+    _built_run(repo, sf, {"latam": "pending"}, status="completed", send_stage="completed")
+    # too old: last night's leftovers
+    _built_run(repo, sf - timedelta(hours=24), {"latam": "failed"})
+    assert repo.find_unsent_run(sf - timedelta(hours=12)) is None
+
+
+@requires_db
+def test_newsletters_for_run_exposes_the_send_error(repo):
+    _, _, sf = _win()
+    rid = _built_run(repo, sf, {"latam": "failed", "middle_east": "sent"})
+    rows = {n["bucket"]: n for n in repo.newsletters_for_run(rid)}
+    assert rows["latam"]["send_error"] == "timed out" and rows["middle_east"]["send_error"] is None

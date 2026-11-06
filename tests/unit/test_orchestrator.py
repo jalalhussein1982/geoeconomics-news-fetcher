@@ -1,11 +1,13 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import pytest
 from geoecon import orchestrator, alerts
 
 class FakeRepo:
     def __init__(self, completed=()):
         self._completed = set(completed); self.calls = []; self.status = None; self.metrics = {}
-    def find_resumable_run(self, ws, we): return 7 if self._completed else None
+    def find_unsent_run(self, since):
+        return ({"run_id": 7, "scheduled_for": datetime(2026, 6, 19, 5, tzinfo=timezone.utc)}
+                if self._completed else None)
     def create_run(self, *a, **k): return 7
     def completed_stages(self, rid): return set(self._completed)
     def start_stage(self, rid, s): self.calls.append(("start", s))
@@ -98,13 +100,13 @@ def test_default_stages_include_summary_in_order():
 
 class _WatchCfg:
     # minimal duck-typed cfg for run_pipeline
-    window_hours = 24
+    window_hours = 24; dry_run = False
     synthesis_model = "deepseek"; synthesis_prompt_id = "task_a_cov"; embedding_model = None
 
 
 class _StubRepo:
     def __init__(self): self.failed = []
-    def find_resumable_run(self, ws, we): return None
+    def find_unsent_run(self, since): return None
     def create_run(self, *a, **k): return 42
     def completed_stages(self, rid): return set()
     def start_stage(self, rid, name): pass
@@ -348,3 +350,79 @@ def test_sigterm_alert_reports_elapsed_and_does_not_guess_the_cause(monkeypatch)
     assert "0h05m52s" in body, body            # the fact that falsifies 'hang-guard'
     assert "most likely" not in body.lower(), body
     assert "71" in body and "discovery" in body
+
+
+# ---- a retry re-sends the unsent briefs instead of rebuilding everything ----
+# 2026-11-06: attempt 2 built all three briefs and one email timed out; attempt 3
+# started a brand-new run, crashed in extraction, and the built brief never went out.
+
+_BUILT = ["discovery", "extraction", "render"]   # everything before send is done
+
+
+class _ResumeRepo(FakeRepo):
+    def __init__(self, unsent=None, completed=()):
+        super().__init__(completed)
+        self._unsent, self.created, self.since = unsent, 0, "never asked"
+    def find_unsent_run(self, since): self.since = since; return self._unsent
+    def create_run(self, *a, **k): self.created += 1; return 99
+
+
+def _stages(ran):
+    return [(n, (lambda c, r, rid, n=n: ran.append((n, rid)) or {}))
+            for n in ("discovery", "extraction", "render", "send")]
+
+
+def test_retry_resends_the_built_briefs_instead_of_rebuilding():
+    repo = _ResumeRepo(unsent={"run_id": 7, "scheduled_for": datetime(2026, 11, 6, 0, 3, tzinfo=timezone.utc)},
+                       completed=_BUILT)
+    ran = []
+    out = orchestrator.run_pipeline(_cfg(), repo, stages=_stages(ran),
+                                    now=datetime(2026, 11, 6, 0, 43, tzinfo=timezone.utc))
+    assert ran == [("send", 7)]          # only the send, on the EARLIER run
+    assert repo.created == 0             # no new run row
+    assert out["run_id"] == 7 and repo.status == "completed"
+
+
+def test_resume_only_looks_at_runs_from_the_last_12_hours():
+    # Tonight's 01:00 run must never adopt last night's leftovers (24h earlier).
+    repo = _ResumeRepo(unsent=None)
+    now = datetime(2026, 11, 6, 0, 43, tzinfo=timezone.utc)
+    orchestrator.run_pipeline(_cfg(), repo, stages=_stages([]), now=now)
+    assert repo.since == now - timedelta(hours=12)
+    assert repo.created == 1
+
+
+def test_dry_run_never_adopts_a_real_run():
+    # A dry run skips SMTP; adopting a real run would mark it sent without sending.
+    import dataclasses
+    repo = _ResumeRepo(unsent={"run_id": 7, "scheduled_for": datetime(2026, 11, 6, 0, 3, tzinfo=timezone.utc)},
+                       completed=_BUILT)
+    ran = []
+    orchestrator.run_pipeline(dataclasses.replace(_cfg(), dry_run=True), repo, stages=_stages(ran),
+                              now=datetime(2026, 11, 6, 0, 43, tzinfo=timezone.utc))
+    assert repo.since == "never asked" and repo.created == 1
+    assert ("send", 7) not in ran
+
+
+def test_resumed_send_keeps_the_original_runs_date_in_the_subject(monkeypatch):
+    # The brief was rendered under the first attempt's date; a retry that starts
+    # after midnight UTC must not mail it under tomorrow's date.
+    from geoecon.stages import send
+    subjects = []
+    def fake_send_pending(cfg, repo, newsletters, subject_for, **kw):
+        subjects.extend(subject_for(n["bucket"]) for n in newsletters)
+        return {"results": [("latam", "sent")], "any_sent": True, "all_sent": True}
+    monkeypatch.setattr(send, "send_pending", fake_send_pending)
+
+    class Repo(_ResumeRepo):
+        emitted = None
+        def newsletters_for_run(self, rid):
+            return [{"newsletter_id": 1, "bucket": "latam", "email_html": "<b>x</b>",
+                     "send_status": "failed"}]
+        def mark_emitted(self, rid): self.emitted = rid
+    all_but_send = [n for n, _ in orchestrator._default_stages(_cfg(), None) if n != "send"]
+    repo = Repo(unsent={"run_id": 7, "scheduled_for": datetime(2026, 7, 29, 23, 0, 30, tzinfo=timezone.utc)},
+                completed=all_but_send)
+    orchestrator.run_pipeline(_cfg(), repo, now=datetime(2026, 7, 30, 0, 5, tzinfo=timezone.utc))
+    assert len(subjects) == 1 and subjects[0].endswith("2026-07-29")
+    assert repo.emitted == 7 and repo.status == "completed"

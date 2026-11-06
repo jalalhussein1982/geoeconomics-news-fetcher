@@ -12,6 +12,11 @@ log = logging.getLogger("geoecon.orchestrator")
 # what made 2026-07-30's cleanup mail look like it concerned an unrelated night.
 PRAGUE = ZoneInfo("Europe/Prague")
 
+# How far back a starting process looks for a run whose briefs were built but not
+# all delivered. Wide enough to cover every retry of one night's Job (and a manual
+# re-run the same morning), far too narrow to reach the previous night's run.
+RESUME_MAX_AGE_HOURS = 12
+
 # What the pipeline is doing right now — read by the SIGTERM handler so a
 # deadline-kill alert can name the hung stage.
 _active = {"run_id": None, "stage": None}
@@ -136,11 +141,13 @@ def reconcile_abandoned_runs(cfg, repo, *, now=None, max_age_hours=6) -> int:
         return 0
 
 
-def _default_stages(cfg, client):
+def _default_stages(cfg, client, date_str=None):
     from .stages import (discovery, discovery_registry, discovery_search, extract, gate, cluster,
                          synth, summary, render, send)
     from . import regions
-    date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    # A resumed run passes the date its briefs were rendered under, so the email
+    # subject matches the content even if the retry starts after midnight UTC.
+    date_str = date_str or datetime.now(timezone.utc).strftime("%Y-%m-%d")
     state = {}
     def _discovery(c, r, rid): state["m"] = discovery.run(c, r, rid); return state["m"]
     def _discovery_registry(c, r, rid): return discovery_registry.run(c, r, rid)
@@ -179,13 +186,25 @@ def run_pipeline(cfg: Config, repo, *, now=None, stages=None, client=None) -> di
     now = now or datetime.now(timezone.utc)
     window_end = now
     window_start = now - timedelta(hours=cfg.window_hours)
-    run_id = repo.find_resumable_run(window_start, window_end)
-    if run_id is None:
+    # If an earlier attempt built the briefs but could not deliver all of them,
+    # adopt that run: its completed stages are skipped below and `send` re-sends
+    # only the unsent regions. On 2026-11-06 the retry instead started from scratch,
+    # crashed in extraction, and a finished brief sat undelivered in the database.
+    # A dry run never adopts a real run — it would mark it sent without sending.
+    resumed = None if cfg.dry_run else repo.find_unsent_run(
+        now - timedelta(hours=RESUME_MAX_AGE_HOURS))
+    date_str = None
+    if resumed:
+        run_id = resumed["run_id"]
+        date_str = resumed["scheduled_for"].astimezone(timezone.utc).strftime("%Y-%m-%d")
+        log.warning("resuming run %s: briefs already built, re-sending unsent regions only",
+                    run_id)
+    else:
         run_id = repo.create_run(window_start, window_end, now,
                                  cfg.synthesis_model, cfg.synthesis_prompt_id, cfg.embedding_model)
     _active["run_id"] = run_id
     done = repo.completed_stages(run_id)
-    stages = stages if stages is not None else _default_stages(cfg, client)
+    stages = stages if stages is not None else _default_stages(cfg, client, date_str)
     metrics = {}
     for name, fn in stages:
         _active["stage"] = name

@@ -131,3 +131,65 @@ def test_extract_one_parse_exception_isolated(monkeypatch):
     assert repo.updates[1]["status"] == "failed"
     assert repo.updates[0]["status"] == "extracted"
     assert repo.updates[2]["status"] == "extracted"
+
+
+class _ConcurrencyProbe:
+    """Records the highest number of callers inside `enter()`..`exit()` at once."""
+
+    def __init__(self):
+        import threading
+        self._lock = threading.Lock()
+        self._inside = 0
+        self.peak = 0
+
+    def __enter__(self):
+        with self._lock:
+            self._inside += 1
+            self.peak = max(self.peak, self._inside)
+
+    def __exit__(self, *exc):
+        with self._lock:
+            self._inside -= 1
+
+
+def test_run_never_calls_trafilatura_extract_concurrently(monkeypatch):
+    # trafilatura.extract() is not thread-safe: 2.1.0 parses through one module-level
+    # lxml parser, so trees built on different threads share a libxml2 string dict and
+    # concurrent calls corrupt the heap (exit 139). That killed 36 nightly attempts —
+    # see docs/INCIDENT-2026-11-20-extraction-thread-crash.md. The fetches may run in
+    # parallel; the extract() calls must not overlap.
+    import time
+    probe = _ConcurrencyProbe()
+
+    def slow_extract(downloaded, **kwargs):
+        with probe:
+            time.sleep(0.01)          # hold the call open so an overlap is observable
+        return None
+
+    monkeypatch.setattr(extract.trafilatura, "extract", slow_extract)
+    arts = [SimpleNamespace(article_id=i, source_url=f"https://x/{i}") for i in range(24)]
+    repo = FakeRepo(arts)
+
+    counts = extract.run(_cfg(EXTRACT_WORKERS="8"), repo, 1, fetcher=lambda u: _HTML)
+
+    assert sum(counts.values()) == 24
+    assert probe.peak == 1, f"{probe.peak} extract() calls overlapped"
+
+
+def test_run_still_fetches_concurrently(monkeypatch):
+    # The fix for the crash above must not serialise the network fetches too: they are
+    # what the thread pool is for (1500+ URLs a night).
+    import time
+    probe = _ConcurrencyProbe()
+
+    def slow_fetch(url):
+        with probe:
+            time.sleep(0.05)
+        return _HTML
+
+    monkeypatch.setattr(extract.trafilatura, "extract", lambda downloaded, **kw: None)
+    arts = [SimpleNamespace(article_id=i, source_url=f"https://x/{i}") for i in range(24)]
+
+    extract.run(_cfg(EXTRACT_WORKERS="8"), FakeRepo(arts), 1, fetcher=slow_fetch)
+
+    assert probe.peak > 1, "fetches ran one at a time"

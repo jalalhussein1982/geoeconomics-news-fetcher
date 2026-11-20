@@ -1,5 +1,5 @@
 from __future__ import annotations
-import json, logging
+import json, logging, threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import trafilatura
 from trafilatura.settings import use_config
@@ -7,6 +7,17 @@ from ..config import Config
 
 log = logging.getLogger("geoecon.extract")
 MIN_CHARS = 200  # below this, treat as headline-only (body dropped; title kept if any)
+
+# trafilatura.extract() must never run on two threads at once. trafilatura 2.1.0 parses
+# every document through one module-level lxml parser (trafilatura.utils.HTML_PARSER), so
+# trees built on different threads share a single libxml2 string dictionary, which is not
+# thread-safe; editing those trees concurrently corrupts the heap and glibc aborts the
+# process (exit 139, "double free or corruption"). That killed 36 nightly attempts between
+# 2026-07-09 and 2026-11-20 — docs/INCIDENT-2026-11-20-extraction-thread-crash.md.
+# Upstream: adbar/trafilatura#925; this lock is the workaround upstream recommends for
+# affected versions. Only the parse is serialised: the fetches, which are what the thread
+# pool is for, do not touch lxml and stay concurrent.
+_EXTRACT_LOCK = threading.Lock()
 
 
 def _make_fetcher(timeout_s: int):
@@ -41,9 +52,10 @@ def extract_one(url, *, fetcher):
     title = None
     text = None
     try:
-        result = trafilatura.extract(downloaded, include_comments=False,
-                                     favor_recall=True, output_format="json",
-                                     with_metadata=True)
+        with _EXTRACT_LOCK:
+            result = trafilatura.extract(downloaded, include_comments=False,
+                                         favor_recall=True, output_format="json",
+                                         with_metadata=True)
         if result:
             try:
                 data = json.loads(result)
@@ -65,8 +77,8 @@ def run(cfg: Config, repo, run_id: int, *, fetcher=None) -> dict:
     arts = repo.articles_for_run(run_id, fetch_status="pending")
     counts = {"extracted": 0, "headline_only": 0, "failed": 0}
     workers = max(1, getattr(cfg, "extract_workers", 12))
-    # Fetch+extract in threads (pure, no DB); write results on THIS thread only —
-    # the psycopg connection is not safe for concurrent use.
+    # Fetch in threads, extract one document at a time (see _EXTRACT_LOCK); write
+    # results on THIS thread only — the psycopg connection is not safe for concurrent use.
     with ThreadPoolExecutor(max_workers=workers) as ex:
         futs = {ex.submit(extract_one, a.source_url, fetcher=fetcher): a for a in arts}
         for fut in as_completed(futs):

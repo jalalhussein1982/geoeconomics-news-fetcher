@@ -5,6 +5,14 @@
 
 Companion doc: [`INCIDENT-2026-07-28-gate-hang.md`](INCIDENT-2026-07-28-gate-hang.md) (yesterday).
 
+> **Correction, 2026-11-20.** The cause proposed in §2 below — a node-local condition such
+> as memory pressure or kubelet eviction — was wrong. The kills in `extraction` are heap
+> corruption from calling `trafilatura.extract()` on 12 threads at once, reproduced in the
+> production image. The memory and `restartPolicy` changes in §5 did not stop the crashes.
+> See [`INCIDENT-2026-11-20-extraction-thread-crash.md`](INCIDENT-2026-11-20-extraction-thread-crash.md)
+> for the cause and [`FAILURE-LOG.md`](FAILURE-LOG.md) for every occurrence. The rest of
+> this document is left as written.
+
 ---
 
 ## 1. TL;DR

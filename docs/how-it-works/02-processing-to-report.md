@@ -313,7 +313,10 @@ The orchestrator's `_send` step decides whether and what to send:
 send-retry on resume re-sends only the pending regions). Per newsletter, `send.run` →
 `build_message` constructs a **multipart/alternative** email (a plain-text fallback plus the
 HTML body) and `_smtp_transport` opens an SMTP connection (`SMTP_HOST:SMTP_PORT`, default 587),
-upgrades with STARTTLS, authenticates (`SMTP_USER` + the Gmail **app password**), and sends. The
+upgrades with STARTTLS, authenticates (`SMTP_USER` + the Gmail **app password**), and sends. A
+transient failure — a timeout, a dropped connection, a 4xx reply — is retried up to twice
+(after 5s, then 20s) before the region is marked `failed`; a rejected password, a refused
+recipient or a 5xx reply is not retried, because it would fail identically. The
 transport is injectable, so tests use a local `aiosmtpd` server instead of real mail. It returns
 `{results, any_sent, all_sent}`.
 
@@ -323,7 +326,9 @@ transport is injectable, so tests use a local `aiosmtpd` server instead of real 
 - **Any region failed:** `_send` raises (the stage fails). The archive HTML was already written
   (so content is never lost), each newsletter's `send_status` reflects its own outcome, and
   crucially `seen_events` is **not** updated — so a failed send doesn't wrongly suppress those
-  events, and a retry re-sends only the regions still `pending`.
+  events. The next attempt started within 12 hours (the Job's own retry, or a manual
+  `kubectl create job --from=cronjob/geoecon-daily …`) adopts this run instead of building a
+  new one, and re-sends only the regions not yet `sent`.
 
 ---
 
@@ -341,10 +346,11 @@ transport is injectable, so tests use a local `aiosmtpd` server instead of real 
 
 ## Why the run survives crashes (state & resumability)
 
-Every stage records its status in `stage_runs`, and the run window is the key in `runs`. If a
-pod dies mid-run, Kubernetes restarts it; `run_pipeline` finds the open run for the window and
-**skips the stages already marked `completed`**, resuming from where it stopped. Idempotency
-makes re-running safe at the data layer too:
+Every stage records its status in `stage_runs`. If a pod dies mid-run, Kubernetes starts a new
+attempt, which **begins a fresh run** — with one exception: if an earlier run from the last 12
+hours built its briefs but failed at `send`, `run_pipeline` adopts that run, **skips the stages
+already marked `completed`**, and re-sends only the unsent briefs. (Resuming a run that died
+*before* `render` is not implemented.) Idempotency makes re-running safe at the data layer too:
 
 - discovery: `articles` deduped by `(run_id, url_hash)`
 - gate: `gate_*` columns upserted per `article_id`

@@ -1,11 +1,13 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import pytest
 from geoecon import orchestrator, alerts
 
 class FakeRepo:
     def __init__(self, completed=()):
         self._completed = set(completed); self.calls = []; self.status = None; self.metrics = {}
-    def find_resumable_run(self, ws, we): return 7 if self._completed else None
+    def find_unsent_run(self, since):
+        return ({"run_id": 7, "scheduled_for": datetime(2026, 6, 19, 5, tzinfo=timezone.utc)}
+                if self._completed else None)
     def create_run(self, *a, **k): return 7
     def completed_stages(self, rid): return set(self._completed)
     def start_stage(self, rid, s): self.calls.append(("start", s))
@@ -44,6 +46,32 @@ def test_stage_failure_marks_failed_and_stops():
         orchestrator.run_pipeline(_cfg(), repo, now=datetime(2026,6,19,5,tzinfo=timezone.utc), stages=stages)
     assert ("fail", "discovery") in repo.calls and repo.status == "failed"
 
+def test_systemic_llm_failure_fails_the_stage_and_records_the_cause():
+    """The breaker only pays off if it reaches fail_stage. Nothing on the LLM path
+    catches broad exceptions (only JSONDecodeError), so SystemicLLMFailure must
+    travel from complete() through fut.result() to run_pipeline's `except
+    Exception` — producing the failed stage row the watchdog reports on, which on
+    2026-07-28 read '(no failed stage recorded)'."""
+    from geoecon.llm.client import SystemicLLMFailure
+    recorded = {}
+
+    class _Repo(FakeRepo):
+        def fail_stage(self, rid, s, e):
+            recorded["stage"] = s; recorded["error"] = str(e)
+            super().fail_stage(rid, s, e)
+
+    repo = _Repo()
+    def systemic(c, r, rid):
+        raise SystemicLLMFailure("gemma4: 5 consecutive complete() calls exhausted")
+    with pytest.raises(SystemicLLMFailure):
+        orchestrator.run_pipeline(_cfg(), repo, now=datetime(2026, 7, 30, 5, tzinfo=timezone.utc),
+                                  stages=[("gate", systemic)])
+
+    assert recorded["stage"] == "gate"
+    assert "gemma4" in recorded["error"] and "exhausted" in recorded["error"]
+    assert repo.status == "failed"
+
+
 def test_default_stages_are_all_in_stage_runs_check():
     # Guard: every orchestrator stage must be permitted by the stage_runs.stage_name
     # CHECK constraint, or start_stage() raises a CheckViolation at runtime — and
@@ -72,13 +100,13 @@ def test_default_stages_include_summary_in_order():
 
 class _WatchCfg:
     # minimal duck-typed cfg for run_pipeline
-    window_hours = 24
+    window_hours = 24; dry_run = False
     synthesis_model = "deepseek"; synthesis_prompt_id = "task_a_cov"; embedding_model = None
 
 
 class _StubRepo:
     def __init__(self): self.failed = []
-    def find_resumable_run(self, ws, we): return None
+    def find_unsent_run(self, since): return None
     def create_run(self, *a, **k): return 42
     def completed_stages(self, rid): return set()
     def start_stage(self, rid, name): pass
@@ -195,6 +223,96 @@ def test_reconcile_alert_does_not_assert_a_single_cause(monkeypatch):
     assert "newsletters" in low or "brief" in low or "delivered" in low
 
 
+def _capture_reconcile(monkeypatch, stale, now):
+    sent = {}
+    monkeypatch.setattr(alerts, "send_alert",
+                        lambda cfg, subject, body, **kw:
+                            sent.update(subject=subject, body=body, kw=kw) or True)
+    orchestrator.reconcile_abandoned_runs(_cfg(), _ReconcileRepo(stale=stale), now=now)
+    return sent
+
+
+def test_reconcile_alert_is_labelled_cleanup_not_a_live_failure(monkeypatch):
+    """This alert reports runs that died BEFORE the current process started and
+    have already been closed out — there is nothing to act on. Sharing the
+    '[GEOECON ALERT]' prefix with real outages is what made 2026-07-30's
+    housekeeping email read as a third consecutive failure."""
+    sent = _capture_reconcile(
+        monkeypatch,
+        [{"run_id": 69, "status": "running",
+          "started_at": datetime(2026, 7, 28, 23, 0, 7, tzinfo=timezone.utc)}],
+        now=datetime(2026, 7, 29, 23, 0, tzinfo=timezone.utc))
+
+    assert sent["kw"].get("prefix") == alerts.CLEANUP_PREFIX
+    assert "no action needed" in sent["subject"].lower()
+
+
+def test_reconcile_subject_dates_the_runs_in_prague_not_utc(monkeypatch):
+    """Run 69 started 2026-07-28 23:00:07Z — which is 01:00 on 07-29 in Prague,
+    the night the operator actually lived through. Printing only the UTC date
+    made the runs look like they came from an earlier, unrelated day."""
+    sent = _capture_reconcile(
+        monkeypatch,
+        [{"run_id": 69, "status": "running",
+          "started_at": datetime(2026, 7, 28, 23, 0, 7, tzinfo=timezone.utc)}],
+        now=datetime(2026, 7, 29, 23, 0, tzinfo=timezone.utc))
+
+    assert "2026-07-29" in sent["subject"]
+    assert "2026-07-28" not in sent["subject"]
+
+
+def test_reconcile_subject_spans_a_date_range_when_runs_span_days(monkeypatch):
+    """The 2026-07-29 sweep closed 8 runs spanning five weeks. One date would
+    misrepresent that, so show the range in Prague terms."""
+    sent = _capture_reconcile(
+        monkeypatch,
+        [{"run_id": 23, "status": "running",
+          "started_at": datetime(2026, 6, 27, 1, 29, tzinfo=timezone.utc)},
+         {"run_id": 62, "status": "running",
+          "started_at": datetime(2026, 7, 23, 23, 0, tzinfo=timezone.utc)}],
+        now=datetime(2026, 7, 29, 1, 41, tzinfo=timezone.utc))
+
+    assert "2026-06-27" in sent["subject"]   # Prague 03:29 same day
+    assert "2026-07-24" in sent["subject"]   # Prague 01:00 the NEXT day
+
+
+def test_reconcile_body_shows_prague_time_beside_utc_for_each_run(monkeypatch):
+    """The body listed bare UTC timestamps, so a reader comparing them against
+    the nightly 01:00 Prague schedule saw a mismatch and assumed a different run."""
+    sent = _capture_reconcile(
+        monkeypatch,
+        [{"run_id": 69, "status": "running",
+          "started_at": datetime(2026, 7, 28, 23, 0, 7, tzinfo=timezone.utc)}],
+        now=datetime(2026, 7, 29, 23, 0, tzinfo=timezone.utc))
+
+    assert "2026-07-29 01:00:07 Prague" in sent["body"]
+    assert "2026-07-28 23:00:07Z" in sent["body"]
+
+
+def test_reconcile_body_says_plainly_this_is_not_a_new_failure(monkeypatch):
+    sent = _capture_reconcile(
+        monkeypatch,
+        [{"run_id": 69, "status": "running",
+          "started_at": datetime(2026, 7, 28, 23, 0, 7, tzinfo=timezone.utc)}],
+        now=datetime(2026, 7, 29, 23, 0, tzinfo=timezone.utc))
+
+    assert "not a new failure" in sent["body"].lower()
+
+
+def test_sigterm_alert_is_not_labelled_as_cleanup(monkeypatch):
+    """A SIGTERM kill IS a live failure — it must never be downgraded."""
+    sent = {}
+    monkeypatch.setattr(alerts, "send_alert",
+                        lambda cfg, subject, body, **kw: sent.update(kw=kw) or True)
+    monkeypatch.setattr(orchestrator, "_active", {"run_id": 7, "stage": "synthesis"})
+    monkeypatch.setattr(orchestrator.signal, "signal", lambda signum, h: None)
+    handler = orchestrator._install_sigterm_alert(object())
+    with pytest.raises(SystemExit):
+        handler(15, None)
+
+    assert sent["kw"].get("prefix") in (None, alerts.SUBJECT_PREFIX)
+
+
 def test_reconcile_is_quiet_and_sends_nothing_when_clean(monkeypatch):
     monkeypatch.setattr(alerts, "send_alert",
                         lambda *a, **k: (_ for _ in ()).throw(AssertionError("must not alert")))
@@ -232,3 +350,79 @@ def test_sigterm_alert_reports_elapsed_and_does_not_guess_the_cause(monkeypatch)
     assert "0h05m52s" in body, body            # the fact that falsifies 'hang-guard'
     assert "most likely" not in body.lower(), body
     assert "71" in body and "discovery" in body
+
+
+# ---- a retry re-sends the unsent briefs instead of rebuilding everything ----
+# 2026-11-06: attempt 2 built all three briefs and one email timed out; attempt 3
+# started a brand-new run, crashed in extraction, and the built brief never went out.
+
+_BUILT = ["discovery", "extraction", "render"]   # everything before send is done
+
+
+class _ResumeRepo(FakeRepo):
+    def __init__(self, unsent=None, completed=()):
+        super().__init__(completed)
+        self._unsent, self.created, self.since = unsent, 0, "never asked"
+    def find_unsent_run(self, since): self.since = since; return self._unsent
+    def create_run(self, *a, **k): self.created += 1; return 99
+
+
+def _stages(ran):
+    return [(n, (lambda c, r, rid, n=n: ran.append((n, rid)) or {}))
+            for n in ("discovery", "extraction", "render", "send")]
+
+
+def test_retry_resends_the_built_briefs_instead_of_rebuilding():
+    repo = _ResumeRepo(unsent={"run_id": 7, "scheduled_for": datetime(2026, 11, 6, 0, 3, tzinfo=timezone.utc)},
+                       completed=_BUILT)
+    ran = []
+    out = orchestrator.run_pipeline(_cfg(), repo, stages=_stages(ran),
+                                    now=datetime(2026, 11, 6, 0, 43, tzinfo=timezone.utc))
+    assert ran == [("send", 7)]          # only the send, on the EARLIER run
+    assert repo.created == 0             # no new run row
+    assert out["run_id"] == 7 and repo.status == "completed"
+
+
+def test_resume_only_looks_at_runs_from_the_last_12_hours():
+    # Tonight's 01:00 run must never adopt last night's leftovers (24h earlier).
+    repo = _ResumeRepo(unsent=None)
+    now = datetime(2026, 11, 6, 0, 43, tzinfo=timezone.utc)
+    orchestrator.run_pipeline(_cfg(), repo, stages=_stages([]), now=now)
+    assert repo.since == now - timedelta(hours=12)
+    assert repo.created == 1
+
+
+def test_dry_run_never_adopts_a_real_run():
+    # A dry run skips SMTP; adopting a real run would mark it sent without sending.
+    import dataclasses
+    repo = _ResumeRepo(unsent={"run_id": 7, "scheduled_for": datetime(2026, 11, 6, 0, 3, tzinfo=timezone.utc)},
+                       completed=_BUILT)
+    ran = []
+    orchestrator.run_pipeline(dataclasses.replace(_cfg(), dry_run=True), repo, stages=_stages(ran),
+                              now=datetime(2026, 11, 6, 0, 43, tzinfo=timezone.utc))
+    assert repo.since == "never asked" and repo.created == 1
+    assert ("send", 7) not in ran
+
+
+def test_resumed_send_keeps_the_original_runs_date_in_the_subject(monkeypatch):
+    # The brief was rendered under the first attempt's date; a retry that starts
+    # after midnight UTC must not mail it under tomorrow's date.
+    from geoecon.stages import send
+    subjects = []
+    def fake_send_pending(cfg, repo, newsletters, subject_for, **kw):
+        subjects.extend(subject_for(n["bucket"]) for n in newsletters)
+        return {"results": [("latam", "sent")], "any_sent": True, "all_sent": True}
+    monkeypatch.setattr(send, "send_pending", fake_send_pending)
+
+    class Repo(_ResumeRepo):
+        emitted = None
+        def newsletters_for_run(self, rid):
+            return [{"newsletter_id": 1, "bucket": "latam", "email_html": "<b>x</b>",
+                     "send_status": "failed"}]
+        def mark_emitted(self, rid): self.emitted = rid
+    all_but_send = [n for n, _ in orchestrator._default_stages(_cfg(), None) if n != "send"]
+    repo = Repo(unsent={"run_id": 7, "scheduled_for": datetime(2026, 7, 29, 23, 0, 30, tzinfo=timezone.utc)},
+                completed=all_but_send)
+    orchestrator.run_pipeline(_cfg(), repo, now=datetime(2026, 7, 30, 0, 5, tzinfo=timezone.utc))
+    assert len(subjects) == 1 and subjects[0].endswith("2026-07-29")
+    assert repo.emitted == 7 and repo.status == "completed"

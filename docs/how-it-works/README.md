@@ -57,8 +57,9 @@ Read in order:
   variables (`Config.from_env`), opens the Postgres connection and applies migrations
   (`geoecon.state.db`), builds the LLM client, then calls `run_pipeline(...)`.
 - **The run.** `run_pipeline()` defines the run's time window as `[now − WINDOW_HOURS, now]`
-  (default 24h). It then either **resumes an existing run** for that window or **creates a
-  new one**, and executes the nine stages in order:
+  (default 24h). It then **creates a new run** — unless a run from the last 12 hours built
+  its briefs but failed to deliver all of them, in which case it **adopts that run** and only
+  re-sends what is missing (`repo.find_unsent_run`). It executes the nine stages in order:
 
   `discovery → discovery_registry → extraction → gate → cluster → synthesis → summary → render → send`
 
@@ -70,8 +71,9 @@ Read in order:
   3. marks itself `completed` with a small JSON checkpoint of metrics.
 
   If a stage raises, the run is marked `failed` and the pod exits non-zero; Kubernetes
-  retries (`backoffLimit: 2`), and the next attempt **skips already-completed stages**.
-  Stages that are already `completed` for the window are skipped on resume.
+  retries (`backoffLimit: 2`). A retry normally **starts a fresh run from discovery**. The one
+  exception is a run that failed at `send` with its briefs already built: the retry adopts
+  it, skips its completed stages, and re-sends only the unsent regions.
 
 ## State lives in Postgres (so runs are auditable and resumable)
 

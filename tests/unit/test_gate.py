@@ -221,6 +221,31 @@ def test_gate_parallel_workers_same_results_and_counts():
         assert repo.gates[i]["country_fips"] == "SA"
 
 
+def test_systemic_llm_failure_escapes_the_worker_pool():
+    """gate fans batches out to GATE_WORKERS threads and collects them through
+    fut.result(). A breaker trip inside a worker has to propagate out of gate.run
+    so run_pipeline can record the failed stage. If it were swallowed per-future
+    the breaker would silently degrade into 'every batch dropped unjudged' — the
+    exact run-67 outcome it exists to prevent."""
+    from geoecon.llm.client import SystemicLLMFailure
+
+    class _Boom:
+        def __init__(self): self.calls = 0
+        def complete(self, model, messages, **kw):
+            self.calls += 1
+            raise SystemicLLMFailure("gemma4: 5 consecutive complete() calls exhausted")
+
+    arts = [_art(i, "SA", f"T{i}") for i in range(20)]
+    cfg = type("C", (), {"gate_model": "m", "gate_batch_size": 2, "gate_workers": 4,
+                         "buckets": ("middle_east", "north_africa", "latam")})()
+    client = _Boom()
+
+    with pytest.raises(SystemicLLMFailure) as ei:
+        gate.run(cfg, _Repo(arts), 1, client, prompt="SYS")
+
+    assert "gemma4" in str(ei.value)
+
+
 def test_gate_parallel_unparsable_still_cascades_to_drop():
     """The cascade (unparsable -> subbatch -> per-article -> drop) must survive
     the parallel path unchanged."""

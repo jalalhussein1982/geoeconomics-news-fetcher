@@ -3,11 +3,15 @@ from geoecon import alerts, watchdog
 
 
 class StubRepo:
-    def __init__(self, run=None, newsletters=(), fails=()):
-        self._run, self._nls, self._fails = run, list(newsletters), list(fails)
-    def latest_run_for_window(self, start, end): return self._run
-    def newsletters_for_run(self, rid): return self._nls
-    def failed_stages(self, rid): return self._fails
+    """`run=` is shorthand for a day with exactly one run."""
+    def __init__(self, run=None, newsletters=(), fails=(), runs=None,
+                 newsletters_by_run=None, fails_by_run=None):
+        self._runs = list(runs) if runs is not None else ([run] if run else [])
+        self._nls = newsletters_by_run or {r["run_id"]: list(newsletters) for r in self._runs}
+        self._fails = fails_by_run or {r["run_id"]: list(fails) for r in self._runs}
+    def runs_for_window(self, start, end): return self._runs
+    def newsletters_for_run(self, rid): return self._nls.get(rid, [])
+    def failed_stages(self, rid): return self._fails.get(rid, [])
 
 
 def _completed_run():
@@ -80,3 +84,64 @@ def test_cli_dispatch_runs_watchdog_without_migrations(monkeypatch):
     monkeypatch.setattr(watchdog, "run", lambda cfg, repo, **kw: calls.update(ran=True) or 0)
     assert orchestrator.main(["watchdog"]) == 0
     assert calls.get("ran") is True and "migrated" not in calls
+
+
+# ---- the watchdog judges the whole day, not just the newest run row ----
+# 2026-11-06: run 198 delivered 2 of 3 briefs; the Job's last retry (run 199)
+# segfaulted and stayed 'running'. The watchdog looked only at 199 and reported
+# "no completed run today (latest: running)" — nothing was running, and it said
+# nothing about the two briefs that had arrived or the one that had not.
+
+def _run(run_id, status, hour=0, minute=0):
+    return {"run_id": run_id, "status": status,
+            "started_at": datetime(2026, 11, 6, hour, minute, tzinfo=timezone.utc),
+            "finished_at": None}
+
+
+def _nl(bucket, status, error=None):
+    return {"bucket": bucket, "send_status": status, "send_error": error}
+
+
+def _night_of_nov_6():
+    return StubRepo(
+        runs=[_run(197, "running", 0, 0), _run(198, "failed", 0, 3), _run(199, "running", 0, 43)],
+        newsletters_by_run={198: [
+            _nl("latam", "failed", "Connection unexpectedly closed: timed out"),
+            _nl("middle_east", "sent"), _nl("north_africa", "sent")]},
+        fails_by_run={198: [{"stage_name": "send", "error": "send: some regions failed to send"}]})
+
+
+def test_partial_delivery_reports_how_many_arrived_and_which_did_not():
+    v = watchdog.check(_night_of_nov_6(), None, None)
+    assert v["ok"] is False
+    assert v["subject"] == "only 2 of 3 briefs sent today (missing: latam)"
+    assert "running" not in v["subject"]
+
+
+def test_partial_delivery_body_gives_the_send_error_and_every_attempt():
+    body = watchdog.check(_night_of_nov_6(), None, None)["body"]
+    assert "Connection unexpectedly closed: timed out" in body
+    for rid in ("197", "198", "199"):
+        assert f"run {rid}" in body
+    assert "01:03" in body          # 00:03Z shown in Prague time, matching the schedule
+
+
+def test_briefs_delivered_by_an_earlier_run_are_ok_despite_a_later_dead_attempt():
+    repo = StubRepo(runs=[dict(_completed_run(), run_id=9), _run(10, "running", 4)],
+                    newsletters_by_run={9: [_nl("latam", "sent"), _nl("middle_east", "sent")]})
+    assert watchdog.check(repo, None, None)["ok"] is True
+
+
+def test_all_briefs_sent_is_ok_even_if_the_run_row_says_failed():
+    # e.g. the missing brief was re-sent by hand: the reader has everything.
+    repo = StubRepo(run=_run(198, "failed"),
+                    newsletters=[_nl("latam", "sent"), _nl("middle_east", "sent")])
+    assert watchdog.check(repo, None, None)["ok"] is True
+
+
+def test_nothing_sent_lists_every_attempt_and_explains_a_running_row():
+    repo = StubRepo(runs=[_run(197, "running", 0, 0), _run(199, "running", 0, 43)])
+    v = watchdog.check(repo, None, None)
+    assert v["ok"] is False and v["subject"] == "no completed run today (latest: running)"
+    assert "run 197" in v["body"] and "run 199" in v["body"]
+    assert "not proof" in v["body"]   # 'running' may be a dead attempt's leftover row

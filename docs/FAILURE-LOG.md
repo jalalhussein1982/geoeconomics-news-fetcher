@@ -17,7 +17,7 @@ out, without rebuilding the history from the database.
 
 | Class | What it is | Nights | Status |
 |---|---|---|---|
-| **A. Extraction thread crash** | The process aborts with heap corruption inside `extraction`. Cause: `trafilatura.extract()` called from 12 threads. | 26 (36 dead attempts) | Cause found 2026-11-20. Fix written and verified the same day, **not yet in an image**; nightly job runs with `EXTRACT_WORKERS=1` as a stopgap since 2026-11-20. [Write-up](INCIDENT-2026-11-20-extraction-thread-crash.md) |
+| **A. Extraction thread crash** | The process aborts with heap corruption inside `extraction`. Cause: `trafilatura.extract()` called from 12 threads. | 26 (36 dead attempts) | Cause found and fixed 2026-11-20 (image `20261120-1`). **Not yet confirmed by scheduled runs** — watch for new class A rows. [Write-up](INCIDENT-2026-11-20-extraction-thread-crash.md) |
 | **B. LLM backend unavailable** | The model group behind gate/synthesis is down or erroring. | 2 | Circuit breaker live since image `20260730-1`; model fallback still not implemented. [Write-up](INCIDENT-2026-07-28-gate-hang.md) |
 | **C. Mail delivery** | SMTP rejects or drops a send. | 2 | Send retry and resume of an unsent run live since image `20261106-1`. The resume path has not yet been exercised by a real partial send. |
 | **D. Killed by deadline or Job cleanup** | The process receives SIGTERM from Kubernetes. | 2 | Side effects of other failures, not independent faults. |

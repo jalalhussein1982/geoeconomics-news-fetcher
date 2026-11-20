@@ -51,7 +51,7 @@ spec:
               # keep in lockstep with watchdog-cronjob.yaml — both need the same
               # alert-code image (the in-process alert hooks live here; tag skew
               # would silently ship a watchdog-only alert layer).
-              image: jalalhussein/geoecon-pipeline:20261106-1
+              image: jalalhussein/geoecon-pipeline:20261120-1
               args: ["run"]
               securityContext:
                 allowPrivilegeEscalation: false
@@ -137,15 +137,6 @@ spec:
                 # retries would feed this breaker.
                 - name: LLM_SYSTEMIC_THRESHOLD
                   value: "5"
-                # STOPGAP, 2026-11-20: single-threaded extraction. With the default
-                # of 12, trafilatura.extract() runs on 12 threads at once and
-                # corrupts the heap (exit 139) on roughly one attempt in four —
-                # see docs/INCIDENT-2026-11-20-extraction-thread-crash.md. One
-                # worker cannot race with itself; it costs ~11 min a night
-                # (extraction 13m51s instead of 2-3 min). Remove this once
-                # stages/extract.py no longer calls extract() concurrently.
-                - name: EXTRACT_WORKERS
-                  value: "1"
               resources:
                 # 4Gi limit: 2026-07-09 attempt 1 (run 42) died with an
                 # uncatchable SIGKILL during extraction — no error row, no crash

@@ -1,11 +1,8 @@
 # Incident 2026-11-20 — all three attempts crashed in `extraction`; root cause found
 
-**Status:** root cause identified and reproduced. Today's brief was delivered at 09:55
+**Status:** fixed and deployed on 2026-11-20 in image `20261120-1`; not yet confirmed by a
+scheduled nightly run (the first is 2026-11-21 01:00). Today's brief was delivered at 09:55
 Prague by a manual rescue run (run 218) with single-threaded extraction — see §6.
-**The code fix is written and verified (§7) but not yet built into an image or deployed.**
-As a stopgap the nightly CronJob has run
-extraction single-threaded (`EXTRACT_WORKERS=1`) since 2026-11-20, which removes the race
-at a cost of about 11 minutes a night.
 
 This document supersedes the cause given in
 [`INCIDENT-2026-07-29-extraction-hard-kill.md`](INCIDENT-2026-07-29-extraction-hard-kill.md)
@@ -178,41 +175,60 @@ the `geoecon-daily` CronJob at about 10:25 Prague on 2026-11-20, and mirrored in
 kubectl -n hussein-ns set env cronjob/geoecon-daily EXTRACT_WORKERS=1
 ```
 
-The first scheduled run with it is 2026-11-21 01:00. It stays until the code fix in §7
-ships; to go back to 12 threads, remove the variable
-(`kubectl -n hussein-ns set env cronjob/geoecon-daily EXTRACT_WORKERS-`).
+It was removed again about 45 minutes later, when image `20261120-1` with the code fix was
+deployed (§7), so no scheduled run ever used it. It remains available as a no-rebuild
+fallback if the crash ever returns.
 
-## 7. Outstanding
+## 7. The fix, and what is still open
 
-1. **Ship the code fix.** Written on 2026-11-20, not yet in an image. `stages/extract.py`
-   now takes a module-level lock (`_EXTRACT_LOCK`) around `trafilatura.extract()`. The page
-   fetches stay threaded: trafilatura's download path does not use lxml. Two tests in
-   `tests/unit/test_extract.py` hold this in place — one fails if two `extract()` calls
-   ever overlap, the other fails if the fetches stop running in parallel.
+### Fix (commit `0dc0e65`, image `20261120-1`)
 
-   Verified in image `20261106-1` by running the real `extract.run()` with 12 workers over
-   96 generated documents, 40 fresh processes per version:
+`stages/extract.py` takes a module-level lock (`_EXTRACT_LOCK`) around
+`trafilatura.extract()`. The page fetches stay threaded: trafilatura's download path does
+not use lxml. Two tests in `tests/unit/test_extract.py` hold this in place — one fails if
+two `extract()` calls ever overlap, the other fails if the fetches stop running in parallel.
 
-   | `stages/extract.py` | Trials | Crashed |
-   |---|---|---|
-   | As shipped in `20261106-1` (no lock) | 40 | **22** — `free(): invalid pointer`, `munmap_chunk(): invalid pointer`, `double free or corruption` |
-   | With the lock | 40 | **0** |
+**Synthetic check, before building.** The real `extract.run()` with 12 workers over 96
+generated documents, 40 fresh processes per version, in image `20261106-1`:
 
-   Not yet known: how long extraction takes in production with the lock. It should sit
-   between the 2–3 minutes of the unlocked version and the 13m51s of a single worker; the
-   first nightly run on the new image will show it.
+| `stages/extract.py` | Trials | Crashed |
+|---|---|---|
+| As shipped in `20261106-1` (no lock) | 40 | **22** — `free(): invalid pointer`, `munmap_chunk(): invalid pointer`, `double free or corruption` |
+| With the lock | 40 | **0** |
 
-   Still to do: build an overlay image (`Dockerfile.overlay`, base `20261106-1`), push it,
-   and point both CronJobs at the new tag.
-2. **Remove the stopgap** (`EXTRACT_WORKERS=1` on the CronJob and in
-   `deploy/cronjob.yaml`) once the fix is live, to get the 11 minutes back.
-3. **Evidence retention.** Failed pods are now deleted within hours. If exit codes and last
+**Live-page check, on the built image.** `extract.run()` from `20261120-1`, 12 workers,
+2 CPUs, over the 1549 real article URLs of run 218:
+
+| Trial | Result | Time |
+|---|---|---|
+| 1 | 1442 extracted, 107 headline-only, 0 failed | 117 s |
+| 2 | 1439 extracted, 110 headline-only, 0 failed | 110 s |
+| 3 | 1444 extracted, 105 headline-only, 0 failed | 106 s |
+
+So the lock costs nothing measurable: about two minutes, the same as before the fix.
+Three clean live runs are weak evidence taken alone (the unfixed code survives about three
+runs in four); the 0-of-40 synthetic result is the stronger one.
+
+**Image.** `20261120-1` is an overlay on `20261106-1` (`Dockerfile.overlay`), built with
+`--platform linux/amd64`. `pip freeze` is identical between the two, and `extract.py` is
+the only file in the package that differs. Registry digest
+`sha256:880da952…7a5945`; an in-cluster throwaway job pulled it on `kub-b13` and ran it.
+
+**Deployed** to `geoecon-daily` and `geoecon-watchdog` on 2026-11-20 at about 11:10 Prague,
+with `EXTRACT_WORKERS=1` removed, so the nightly job is back to 12 fetch threads.
+
+### Still open
+
+1. **Confirmation in production.** The first scheduled run on `20261120-1` is 2026-11-21
+   01:00. Given the previous rate of about one bad night in five, it takes a few weeks
+   without a class A row in the failure log before the fix can be called confirmed.
+2. **Evidence retention.** Failed pods are now deleted within hours. If exit codes and last
    log lines matter for a future fault, they have to be captured some other way, for
    example by having the watchdog record the termination state of the day's pods.
-4. **Upgrading trafilatura** to a release containing PR #1092 would also remove the bug,
-   but `pyproject.toml` pins nothing, so a rebuild from the main `Dockerfile` would change
-   lxml, glibc and everything else at the same time. A lock in our own code is the smaller
-   change.
+3. **Upgrading trafilatura** to a release containing PR #1092 would make the lock
+   unnecessary, but `pyproject.toml` pins nothing, so a rebuild from the main `Dockerfile`
+   would change lxml, glibc and everything else at the same time. Not worth doing for
+   this alone; when a dependency refresh happens anyway, the lock can stay as a guard.
 
 ---
 
